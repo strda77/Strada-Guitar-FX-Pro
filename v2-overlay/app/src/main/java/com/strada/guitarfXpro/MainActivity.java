@@ -218,7 +218,7 @@ public class MainActivity extends Activity {
 
             int chorusPos = 0, delayPos = 0, reverbPos = 0;
             double phase = 0, lfo = 0;
-            double step = 2.0 * Math.PI * 110.0 / sampleRate;
+            double step = 2.0 * Math.PI * 220.0 / sampleRate;
             double lfoStep = 2.0 * Math.PI * 0.35 / sampleRate;
 
             track.play();
@@ -239,12 +239,10 @@ public class MainActivity extends Activity {
                     if (gate && Math.abs(x) < 0.025f) x = 0;
 
                     if (overdrive) {
-                        x = (float)Math.tanh(x * 3.0);
-                    }
+                        x = (float)Math.tanh(x * 8.0);
 
                     if (distortion) {
-                        x = Math.max(-0.65f, Math.min(0.65f, x * 4.0f));
-                    }
+                        x = Math.max(-0.72f, Math.min(0.72f, x * 12.0f));
 
                     if (chorus) {
                         int d = 350 + (int)(180 * (1 + Math.sin(lfo)));
