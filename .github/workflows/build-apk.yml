@@ -42,6 +42,18 @@ jobs:
           unzip -q Strada-Guitar-FX-Pro-Source.zip -d source
           test -f source/Strada-Guitar-FX-Pro/app/build.gradle
 
+      
+      - name: Inspect app source for V2 integration
+        working-directory: source/Strada-Guitar-FX-Pro
+        run: |
+          echo '--- JAVA SOURCE FILES ---'
+          find app/src/main -type f | sort
+          echo '--- MAIN ACTIVITY ---'
+          MAIN=$(find app/src/main -name MainActivity.java | head -n 1)
+          if [ -n "$MAIN" ]; then sed -n '1,280p' "$MAIN"; else echo 'MainActivity.java not found'; fi
+          echo '--- MANIFEST ---'
+          sed -n '1,220p' app/src/main/AndroidManifest.xml
+
       - name: Build debug APK
         working-directory: source/Strada-Guitar-FX-Pro
         run: gradle --no-daemon assembleDebug
