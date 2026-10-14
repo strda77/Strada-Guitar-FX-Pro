@@ -61,7 +61,7 @@ public class MainActivity extends Activity {
 
         LinearLayout preset = card();
         root.addView(preset);
-        preset.addView(text("CURRENT PRESET", 11, orange, true));
+        preset.addView(text("CURRENT PRESET", 11, orange, true));l0p
         presetLabel = text(presets[presetIndex], 23, Color.WHITE, true);
         presetLabel.setPadding(0, dp(8), 0, dp(12));
         preset.addView(presetLabel);
@@ -237,7 +237,6 @@ public class MainActivity extends Activity {
                     if (lfo >= 2 * Math.PI) lfo -= 2 * Math.PI;
 
                     if (gate && Math.abs(x) < 0.025f) x = 0;
-
                     if (overdrive) {
                         x = (float)Math.tanh(x * 8.0);
 
