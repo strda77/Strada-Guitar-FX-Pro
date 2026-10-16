@@ -13,6 +13,10 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 
 public class MainActivity extends Activity {
     private final int bg = Color.rgb(16,17,20);
@@ -96,11 +100,11 @@ public class MainActivity extends Activity {
         LinearLayout testRow = new LinearLayout(this);
         root.addView(testRow);
         audioButton = addButton(
-            testRow, "START TEST TONE", this::toggleAudio, 1
+            testRow, "START MIC FX", this::toggleAudio, 1
         );
 
         TextView info = text(
-            "Suara uji sintetis • Output mengikuti pengaturan audio HP",
+            "Input mikrofon HP • Output headphone • Efek audio dasar",
             12, Color.LTGRAY, false
         );
         info.setPadding(0, dp(10), 0, dp(4));
@@ -114,7 +118,7 @@ public class MainActivity extends Activity {
             () -> toast("Looper belum tersedia."), 1);
 
         TextView note = text(
-            "V2 TEST BUILD • REAL GUITAR INPUT NOT IMPLEMENTED",
+            "V2 TEST BUILD • MIC INPUT TEST BUILD",
             10, Color.GRAY, false
         );
         note.setGravity(Gravity.CENTER);
@@ -166,130 +170,228 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void toggleAudio() {
-        if (audioRunning) {
-            audioRunning = false;
-            audioButton.setText("START TEST TONE");
-            toast("Menghentikan suara uji...");
-            return;
-        }
-
-        audioRunning = true;
-        audioButton.setText("STOP TEST TONE");
-        audioThread = new Thread(this::runAudio, "StradaAudio");
-        audioThread.start();
-        toast("Suara uji dimulai. Atur volume rendah dahulu.");
+    
+private void toggleAudio() {
+    if (audioRunning) {
+        audioRunning = false;
+        audioButton.setText("START MIC FX");
+        toast("Menghentikan input audio...");
+        return;
     }
 
-    private void runAudio() {
-        final int sampleRate = 44100;
-        final int frames = 512;
-        int min = AudioTrack.getMinBufferSize(
+    if (android.os.Build.VERSION.SDK_INT >= 23
+            && checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+        requestPermissions(
+            new String[]{Manifest.permission.RECORD_AUDIO}, 1001
+        );
+        return;
+    }
+
+    audioRunning = true;
+    audioButton.setText("STOP MIC FX");
+    audioThread = new Thread(this::runAudio, "StradaAudio");
+    audioThread.start();
+    toast("Input mikrofon dimulai. Gunakan headphone.");
+}
+
+@Override
+public void onRequestPermissionsResult(
+        int requestCode, String[] permissions, int[] grantResults) {
+    super.onRequestPermissionsResult(
+        requestCode, permissions, grantResults
+    );
+
+    if (requestCode == 1001) {
+        if (grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            toggleAudio();
+        } else {
+            toast("Izin mikrofon diperlukan untuk input audio.");
+        }
+    }
+}
+
+private void runAudio() {
+    final int sampleRate = 44100;
+    final int frames = 512;
+
+    int inputMin = AudioRecord.getMinBufferSize(
+        sampleRate,
+        AudioFormat.CHANNEL_IN_MONO,
+        AudioFormat.ENCODING_PCM_16BIT
+    );
+
+    int outputMin = AudioTrack.getMinBufferSize(
+        sampleRate,
+        AudioFormat.CHANNEL_OUT_MONO,
+        AudioFormat.ENCODING_PCM_16BIT
+    );
+
+    AudioRecord recorder = null;
+    AudioTrack track = null;
+
+    try {
+        if (inputMin <= 0 || outputMin <= 0) {
+            throw new IllegalStateException(
+                "Format audio tidak didukung perangkat."
+            );
+        }
+
+        recorder = new AudioRecord(
+            MediaRecorder.AudioSource.MIC,
             sampleRate,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+            Math.max(inputMin, frames * 4)
         );
 
-        if (min <= 0) {
-            audioRunning = false;
-            runOnUiThread(() -> {
-                audioButton.setText("START TEST TONE");
-                toast("Perangkat audio tidak dapat dimulai.");
-            });
-            return;
+        track = new AudioTrack(
+            AudioManager.STREAM_MUSIC,
+            sampleRate,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+            Math.max(outputMin, frames * 4),
+            AudioTrack.MODE_STREAM
+        );
+
+        if (recorder.getState() != AudioRecord.STATE_INITIALIZED
+                || track.getState() != AudioTrack.STATE_INITIALIZED) {
+            throw new IllegalStateException(
+                "Input atau output audio gagal diinisialisasi."
+            );
         }
 
-        AudioTrack track = null;
+        short[] input = new short[frames];
+        short[] output = new short[frames];
 
-        try {
-            track = new AudioTrack(
-                AudioManager.STREAM_MUSIC,
-                sampleRate,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                Math.max(min, frames * 4),
-                AudioTrack.MODE_STREAM
+        float[] chorusBuffer = new float[1800];
+        float[] delayBuffer = new float[12000];
+        float[] reverbBuffer = new float[6000];
+
+        int chorusPos = 0;
+        int delayPos = 0;
+        int reverbPos = 0;
+        double lfo = 0;
+        double lfoStep = 2.0 * Math.PI * 0.35 / sampleRate;
+
+        track.play();
+        recorder.startRecording();
+
+        if (recorder.getRecordingState()
+                != AudioRecord.RECORDSTATE_RECORDING) {
+            throw new IllegalStateException(
+                "Mikrofon tidak mulai merekam."
             );
+        }
 
-            short[] output = new short[frames];
-            float[] chorusBuffer = new float[1800];
-            float[] delayBuffer = new float[12000];
-            float[] reverbBuffer = new float[6000];
+        while (audioRunning) {
+            int count = recorder.read(input, 0, frames);
 
-            int chorusPos = 0, delayPos = 0, reverbPos = 0;
-            double phase = 0, lfo = 0;
-            double step = 2.0 * Math.PI * 220.0 / sampleRate;
-            double lfoStep = 2.0 * Math.PI * 0.35 / sampleRate;
+            if (count < 0) {
+                throw new IllegalStateException(
+                    "Gagal membaca input mikrofon: " + count
+                );
+            }
 
-            track.play();
+            for (int i = 0; i < count; i++) {
+                float x = input[i] / 32768.0f;
 
-            while (audioRunning) {
-                for (int i = 0; i < frames; i++) {
-                    float x = (float)(
-                        Math.sin(phase)
-                        + 0.35 * Math.sin(2 * phase)
-                        + 0.15 * Math.sin(3 * phase)
-                    ) * 0.18f;
-
-                    phase += step;
-                    lfo += lfoStep;
-                    if (phase >= 2 * Math.PI) phase -= 2 * Math.PI;
-                    if (lfo >= 2 * Math.PI) lfo -= 2 * Math.PI;
-
-                    if (gate && Math.abs(x) < 0.025f) x = 0;
-
-                    if (overdrive) {
-                        x = (float)Math.tanh(x * 8.0);
-                    }
-
-                    if (distortion) {
-                     x = Math.max(-0.72f, Math.min(0.72f, x * 12.0f));
-                    }
-
-                    if (chorus) {
-                        int d = 350 + (int)(180 * (1 + Math.sin(lfo)));
-                        int read = (chorusPos - d + chorusBuffer.length)
-                            % chorusBuffer.length;
-                        float delayed = chorusBuffer[read];
-                        chorusBuffer[chorusPos] = x;
-                        x += delayed * 0.35f;
-                        chorusPos = (chorusPos + 1) % chorusBuffer.length;
-                    }
-
-                    if (delay) {
-                        float echo = delayBuffer[delayPos];
-                        delayBuffer[delayPos] = x + echo * 0.35f;
-                        x += echo * 0.40f;
-                        delayPos = (delayPos + 1) % delayBuffer.length;
-                    }
-
-                    if (reverb) {
-                        float room = reverbBuffer[reverbPos];
-                        reverbBuffer[reverbPos] = x + room * 0.40f;
-                        x += room * 0.25f;
-                        reverbPos = (reverbPos + 1) % reverbBuffer.length;
-                    }
-
-                    x = Math.max(-0.95f, Math.min(0.95f, x));
-                    output[i] = (short)(x * 32767);
+                lfo += lfoStep;
+                if (lfo >= 2.0 * Math.PI) {
+                    lfo -= 2.0 * Math.PI;
                 }
 
-                track.write(output, 0, output.length);
+                if (gate && Math.abs(x) < 0.025f) {
+                    x = 0;
+                }
+
+                if (overdrive) {
+                    x = (float) Math.tanh(x * 4.0);
+                }
+
+                if (distortion) {
+                    x = Math.max(
+                        -0.75f, Math.min(0.75f, x * 5.0f)
+                    );
+                }
+
+                if (chorus) {
+                    int d = 350 + (int)(
+                        180 * (1 + Math.sin(lfo))
+                    );
+                    int read = (chorusPos - d
+                        + chorusBuffer.length)
+                        % chorusBuffer.length;
+
+                    float delayed = chorusBuffer[read];
+                    chorusBuffer[chorusPos] = x;
+                    x += delayed * 0.30f;
+                    chorusPos = (chorusPos + 1)
+                        % chorusBuffer.length;
+                }
+
+                if (delay) {
+                    float echo = delayBuffer[delayPos];
+                    delayBuffer[delayPos] = x + echo * 0.35f;
+                    x += echo * 0.35f;
+                    delayPos = (delayPos + 1)
+                        % delayBuffer.length;
+                }
+
+                if (reverb) {
+                    float room = reverbBuffer[reverbPos];
+                    reverbBuffer[reverbPos] = x + room * 0.40f;
+                    x += room * 0.20f;
+                    reverbPos = (reverbPos + 1)
+                        % reverbBuffer.length;
+                }
+
+                x = Math.max(-0.95f, Math.min(0.95f, x));
+                output[i] = (short) (x * 32767.0f);
             }
-        } catch (Exception e) {
-            runOnUiThread(() -> toast("Audio error: " + e.getMessage()));
-        } finally {
-            if (track != null) {
-                try { track.pause(); } catch (Exception ignored) {}
-                try { track.flush(); } catch (Exception ignored) {}
-                try { track.release(); } catch (Exception ignored) {}
+
+            if (count > 0) {
+                int written = track.write(output, 0, count);
+                if (written < 0) {
+                    throw new IllegalStateException(
+                        "Gagal mengirim audio ke output: " + written
+                    );
+                }
             }
-            audioRunning = false;
-            runOnUiThread(() -> {
-                if (audioButton != null) audioButton.setText("START TEST TONE");
-            });
         }
+    } catch (Exception e) {
+        runOnUiThread(() -> toast(
+            "Audio error: " + e.getMessage()
+        ));
+    } finally {
+        if (recorder != null) {
+            try {
+                if (recorder.getRecordingState()
+                        == AudioRecord.RECORDSTATE_RECORDING) {
+                    recorder.stop();
+                }
+            } catch (Exception ignored) {}
+            try { recorder.release(); } catch (Exception ignored) {}
+        }
+
+        if (track != null) {
+            try {
+                track.pause();
+                track.flush();
+            } catch (Exception ignored) {}
+            try { track.release(); } catch (Exception ignored) {}
+        }
+
+        audioRunning = false;
+        runOnUiThread(() -> {
+            if (audioButton != null) {
+                audioButton.setText("START MIC FX");
+            }
+        });
     }
+}
+
 
     private LinearLayout card() {
         LinearLayout b = new LinearLayout(this);
