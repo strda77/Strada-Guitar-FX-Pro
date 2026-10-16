@@ -43,7 +43,6 @@ jobs:
           test -f source/Strada-Guitar-FX-Pro/app/build.gradle
 
       
-      
       - name: Apply V2 MainActivity overlay
         run: |
           cp v2-overlay/app/src/main/java/com/strada/guitarfXpro/MainActivity.java source/Strada-Guitar-FX-Pro/app/src/main/java/com/strada/guitarfXpro/MainActivity.java
