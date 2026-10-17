@@ -1,3 +1,4 @@
+
 package com.strada.guitarfXpro;
 
 import android.Manifest;
@@ -675,4 +676,3 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 }
-
