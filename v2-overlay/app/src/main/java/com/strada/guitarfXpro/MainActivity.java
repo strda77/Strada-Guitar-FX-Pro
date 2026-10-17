@@ -27,6 +27,7 @@ public class MainActivity extends Activity {
     private TextView presetLabel;
     private TextView audioButton;
     private int presetIndex = 0;
+    private final TextView[] effectToggles = new TextView[6];
 
     private final String[] presets = {
         "Clean Glass", "Blues Drive", "Classic Rock",
@@ -142,6 +143,11 @@ public class MainActivity extends Activity {
         row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
 
         TextView toggle = text("OFF", 12, Color.LTGRAY, true);
+        int effectId = getEffectId(name);
+    if (effectId >= 0) {
+        effectToggles[effectId] = toggle;
+}
+        
         toggle.setGravity(Gravity.CENTER);
         toggle.setPadding(dp(14), dp(8), dp(14), dp(8));
         toggle.setBackground(roundBg(Color.rgb(50,52,58)));
@@ -436,11 +442,63 @@ private void runAudio() {
         return d;
     }
 
-    private void changePreset(int delta) {
-        presetIndex = (presetIndex + delta + presets.length) % presets.length;
-        presetLabel.setText(presets[presetIndex]);
-        toast("Preset dipilih: " + presets[presetIndex]);
+     private void changePreset(int delta) {
+         presetIndex = (presetIndex + delta + presets.length)
+            % presets.length;
+
+    // Konfigurasi: Gate, Overdrive, Distortion,
+    // Chorus, Delay, Reverb.
+    boolean[][] configs = {
+        {false, false, false, false, false, false},
+        {true,  true,  false, true,  false, false},
+        {true,  true,  false, false, true,  false},
+        {true,  true,  true,  false, true,  false},
+        {true,  false, true,  false, false, false},
+        {false, false, false, true,  true,  true}
+    };
+
+    boolean[] c = configs[presetIndex];
+
+    gate = c[0];
+    overdrive = c[1];
+    distortion = c[2];
+    chorus = c[3];
+    delay = c[4];
+    reverb = c[5];
+
+    presetLabel.setText(presets[presetIndex]);
+
+    for (int i = 0; i < effectToggles.length; i++) {
+        updateEffectToggle(i, c[i]);
     }
+
+    toast("Preset dipilih: " + presets[presetIndex]);
+}
+
+private int getEffectId(String name) {
+    switch (name) {
+        case "Noise Gate": return 0;
+        case "Overdrive": return 1;
+        case "Distortion": return 2;
+        case "Chorus": return 3;
+        case "Delay": return 4;
+        case "Reverb": return 5;
+        default: return -1;
+    }
+}
+
+private void updateEffectToggle(int id, boolean enabled) {
+    TextView toggle = effectToggles[id];
+
+    if (toggle == null) return;
+
+    toggle.setText(enabled ? "ON" : "OFF");
+    toggle.setTextColor(enabled ? Color.BLACK : Color.LTGRAY);
+    toggle.setBackground(roundBg(
+        enabled ? orange : Color.rgb(50, 52, 58)
+    ));
+}
+
 
     private void toast(String s) {
         Toast.makeText(this, s, Toast.LENGTH_SHORT).show();
