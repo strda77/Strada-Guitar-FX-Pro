@@ -598,10 +598,10 @@ public class MainActivity extends Activity {
     }
 
     private TextView section(String title) {
-        TextView t = text(title, 16, Color.WHITE, true);
-        t.setPadding(0, dp(20), 0, dp(10));
-        root.addView(t);
-        return t;
+    TextView t = new TextView(this);
+    // pengaturan tampilan judul
+    return t;
+    }
     }
 
     private LinearLayout card() {
