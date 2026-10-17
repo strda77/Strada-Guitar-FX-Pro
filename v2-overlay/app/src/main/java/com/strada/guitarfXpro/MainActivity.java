@@ -596,14 +596,12 @@ public class MainActivity extends Activity {
             });
         }
     }
-
     private TextView section(String title) {
     TextView t = new TextView(this);
     // pengaturan tampilan judul
     return t;
     }
-    }
-
+}
     private LinearLayout card() {
         LinearLayout b = new LinearLayout(this);
         b.setOrientation(LinearLayout.VERTICAL);
