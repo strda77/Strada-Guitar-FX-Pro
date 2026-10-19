@@ -601,7 +601,7 @@ public class MainActivity extends Activity {
     // pengaturan tampilan judul
     return t;
     }
-}
+    
     private LinearLayout card() {
         LinearLayout b = new LinearLayout(this);
         b.setOrientation(LinearLayout.VERTICAL);
