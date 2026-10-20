@@ -61,7 +61,7 @@ jobs:
 
       - name: Build debug APK
         working-directory: source/Strada-Guitar-FX-Pro
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon assembleDebug --stacktrace --info
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
