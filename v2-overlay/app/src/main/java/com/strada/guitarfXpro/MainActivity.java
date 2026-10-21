@@ -71,6 +71,35 @@ public class MainActivity extends Activity {
     private volatile float masterVolume = 0.75f;
 
     private volatile float ampGain = 3.0f;
+    private volatile float ampBass = 50.0f;
+    private volatile float ampMiddle = 50.0f;
+    private volatile float ampTreble = 50.0f;
+    private volatile float ampPresence = 50.0f;
+    private volatile float ampVolume = 70.0f;
+
+    private volatile int selectedAmp = 0;
+    private volatile int selectedCabinet = 0;
+    private volatile boolean cabinetEnabled = true;
+
+    private final String[] ampNames = {
+    "Clean Twin",
+    "Warm Clean",
+    "Blues Combo",
+    "British Crunch",
+    "Classic Rock",
+    "British Lead",
+    "Modern High Gain",
+    "Metal Extreme"
+};
+    private final String[] cabinetNames = {
+    "1x8 Small Speaker",
+    "1x10 Vintage",
+    "1x12 Open Back",
+    "2x12 Classic",
+    "4x10 Bass Cabinet",
+    "4x12 British Stack"
+};
+   
     private volatile float cabCutoff = 0.12f;
 
     private int presetIndex = 0;
