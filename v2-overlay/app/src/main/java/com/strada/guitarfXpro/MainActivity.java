@@ -19,6 +19,9 @@ import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
 
 public class MainActivity extends Activity {
 
@@ -160,21 +163,100 @@ public class MainActivity extends Activity {
         for (int i = 0; i < effectNames.length; i++) {
             addEffect(i);
         }
+        
+root.addView(section("AMP SELECTOR"));
 
-        root.addView(section("AMP & CAB SIM"));
+LinearLayout ampCard = card();
+root.addView(ampCard);
 
-        LinearLayout ampCard = card();
-        root.addView(ampCard);
+ampCard.addView(text("AMPLIFIER MODEL", 12, orange, true));
 
-        ampCard.addView(text(
-            "Basic amplifier saturation and cabinet-style filtering",
-            12, Color.LTGRAY, false
-        ));
+Spinner ampSpinner = new Spinner(this);
+ampSpinner.setAdapter(new ArrayAdapter<String>(
+    this,
+    android.R.layout.simple_spinner_dropdown_item,
+    ampNames
+));
+ampSpinner.setSelection(selectedAmp);
+ampCard.addView(ampSpinner);
 
-        ampButton = addButton(
-            ampCard, "AMP / CAB SIM: ON",
-            this::toggleAmp, 1
-        );
+ampCard.addView(text("AMP GAIN", 12, Color.WHITE, true));
+SeekBar ampGainBar = new SeekBar(this);
+ampGainBar.setMax(100);
+ampGainBar.setProgress(30);
+ampCard.addView(ampGainBar);
+ampGainBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+    public void onProgressChanged(SeekBar bar, int value, boolean fromUser) {
+        ampGain = value / 10.0f;
+    }
+    public void onStartTrackingTouch(SeekBar bar) {}
+    public void onStopTrackingTouch(SeekBar bar) {}
+});
+
+ampCard.addView(text("BASS", 12, Color.WHITE, true));
+addAmpToneControl(ampCard, ampBass);
+
+ampCard.addView(text("MIDDLE", 12, Color.WHITE, true));
+addAmpToneControl(ampCard, ampMiddle);
+
+ampCard.addView(text("TREBLE", 12, Color.WHITE, true));
+addAmpToneControl(ampCard, ampTreble);
+
+ampCard.addView(text("PRESENCE", 12, Color.WHITE, true));
+addAmpToneControl(ampCard, ampPresence);
+
+ampCard.addView(text("AMP VOLUME", 12, Color.WHITE, true));
+addAmpToneControl(ampCard, ampVolume);
+
+ampSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+    public void onItemSelected(android.widget.AdapterView<?> parent,
+                               android.view.View view,
+                               int position, long id) {
+        selectedAmp = position;
+    }
+    public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+});
+
+root.addView(section("CABINET SELECTOR"));
+
+LinearLayout cabCard = card();
+root.addView(cabCard);
+
+Spinner cabSpinner = new Spinner(this);
+cabSpinner.setAdapter(new ArrayAdapter<String>(
+    this,
+    android.R.layout.simple_spinner_dropdown_item,
+    cabinetNames
+));
+cabSpinner.setSelection(selectedCabinet);
+cabCard.addView(cabSpinner);
+
+CheckBox cabToggle = new CheckBox(this);
+cabToggle.setText("CABINET SIMULATION ON/OFF");
+cabToggle.setTextColor(Color.WHITE);
+cabToggle.setButtonTintList(
+    android.content.res.ColorStateList.valueOf(orange)
+);
+cabToggle.setChecked(cabinetEnabled);
+cabCard.addView(cabToggle);
+
+cabToggle.setOnCheckedChangeListener((button, checked) -> {
+    cabinetEnabled = checked;
+});
+
+cabSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+    public void onItemSelected(android.widget.AdapterView<?> parent,
+                               android.view.View view,
+                               int position, long id) {
+        selectedCabinet = position;
+    }
+    public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+});
+
+ampButton = addButton(
+    cabCard, "AMP / CAB SIM: ON",
+    this::toggleAmp, 1
+);
 
         root.addView(section("MASTER VOLUME"));
 
@@ -712,5 +794,21 @@ private TextView section(String title) {
     protected void onDestroy() {
         audioRunning = false;
         super.onDestroy();
-    }
+        
+    private void addAmpToneControl(LinearLayout parent, float initialValue) {
+    SeekBar bar = new SeekBar(this);
+    bar.setMax(100);
+    bar.setProgress(Math.max(0, Math.min(100, (int) initialValue)));
+    parent.addView(bar);
+
+    bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        public void onProgressChanged(SeekBar seekBar, int progress,
+                                      boolean fromUser) {
+            // Nilai slider tersedia untuk dihubungkan ke DSP.
+        }
+
+        public void onStartTrackingTouch(SeekBar seekBar) {}
+
+        public void onStopTrackingTouch(SeekBar seekBar) {}
+    });
 }
