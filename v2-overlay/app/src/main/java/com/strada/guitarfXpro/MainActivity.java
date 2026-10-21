@@ -790,25 +790,35 @@ private TextView section(String title) {
         );
     }
 
-    @Override
-    protected void onDestroy() {
-        audioRunning = false;
-        super.onDestroy();
-        
-    private void addAmpToneControl(LinearLayout parent, float initialValue) {
+    (SeekBar seekBar) {}
+
+@Override
+protected void onDestroy() {
+    audioRunning = false;
+    super.onDestroy();
+}
+
+private void addAmpToneControl(LinearLayout parent, float initialValue) {
     SeekBar bar = new SeekBar(this);
     bar.setMax(100);
     bar.setProgress(Math.max(0, Math.min(100, (int) initialValue)));
     parent.addView(bar);
 
     bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-        public void onProgressChanged(SeekBar seekBar, int progress,
-                                      boolean fromUser) {
-            // Nilai slider tersedia untuk dihubungkan ke DSP.
+        @Override
+        public void onProgressChanged(
+                SeekBar seekBar, int progress, boolean fromUser) {
+            // Akan dihubungkan ke mesin audio pada tahap berikutnya.
         }
 
-        public void onStartTrackingTouch(SeekBar seekBar) {}
+        @Override
+        public void onStartTrackingTouch(SeekBar seekBar) {
+        }
 
-        public void onStopTrackingTouch(SeekBar seekBar) {}
+        @Override
+        public void onStopTrackingTouch(SeekBar seekBar) {
+        }
     });
 }
+}
+
