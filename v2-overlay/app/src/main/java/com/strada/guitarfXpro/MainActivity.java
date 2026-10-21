@@ -596,11 +596,22 @@ public class MainActivity extends Activity {
             });
         }
     }
-    private TextView section(String title) {
+    
+private TextView section(String title) {
     TextView t = new TextView(this);
-    // pengaturan tampilan judul
+    t.setText(title);
+    t.setTextSize(13);
+    t.setTextColor(orange);
+    t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+    t.setPadding(
+        dp(2),
+        dp(18),
+        dp(2),
+        dp(10)
+    );
+    t.setLetterSpacing(0.08f);
     return t;
-    }
+}
     
     private LinearLayout card() {
         LinearLayout b = new LinearLayout(this);
