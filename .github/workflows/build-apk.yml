@@ -42,10 +42,13 @@ jobs:
           unzip -q Strada-Guitar-FX-Pro-Source.zip -d source
           test -f source/Strada-Guitar-FX-Pro/app/build.gradle
 
-      
-      - name: Apply V2 MainActivity overlay
+            
+      - name: Apply V4 app overlays
         run: |
           cp v2-overlay/app/src/main/java/com/strada/guitarfXpro/MainActivity.java source/Strada-Guitar-FX-Pro/app/src/main/java/com/strada/guitarfXpro/MainActivity.java
+          cp v2-overlay/app/src/main/java/com/strada/guitarfXpro/AndroidManifest.xml source/Strada-Guitar-FX-Pro/app/src/main/AndroidManifest.xml
+
+
 
       - name: Inspect app source for V2 integration
         working-directory: source/Strada-Guitar-FX-Pro
