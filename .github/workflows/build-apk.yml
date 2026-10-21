@@ -68,7 +68,7 @@ jobs:
           cat app/src/main/AndroidManifest.xml
           echo "--- XML VALIDATION ---"
           python3 -c "import xml.etree.ElementTree as ET; ET.parse('app/src/main/AndroidManifest.xml'); print('XML VALID')"
-
+   
       - name: Build debug APK
         working-directory: source/Strada-Guitar-FX-Pro
         run: gradle --no-daemon assembleDebug --stacktrace --info
