@@ -60,10 +60,23 @@ jobs:
           if [ -n "$MAIN" ]; then sed -n '1,280p' "$MAIN"; else echo 'MainActivity.java not found'; fi
           echo '--- MANIFEST ---'
           sed -n '1,220p' app/src/main/AndroidManifest.xml
+          echo '--- CHECK BLUETOOTH PERMISSION ---'
+          grep -n 'BLUETOOTH' app/src/main/AndroidManifest.xml || true
 
       - name: Build debug APK
         working-directory: source/Strada-Guitar-FX-Pro
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon assembleDebug --stacktrace --info
+
+        
+      - name: Validate Android Manifest
+        working-directory: source/Strada-Guitar-FX-Pro
+        run: |
+          echo "--- MANIFEST PATH ---"
+          pwd
+          echo "--- MANIFEST CONTENT ---"
+          cat app/src/main/AndroidManifest.xml
+          echo "--- XML VALIDATION ---"
+          python3 -c "import xml.etree.ElementTree as ET; ET.parse('app/src/main/AndroidManifest.xml'); print('XML VALID')"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
