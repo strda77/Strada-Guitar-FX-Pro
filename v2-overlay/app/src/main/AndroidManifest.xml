@@ -18,14 +18,14 @@
     <application
         android:allowBackup="true"
         android:label="Strada Guitar FX Pro"
-        android:theme="@android:style/Theme.Material.NoActionBar" />
+        android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity
             android:name="com.strada.guitarfXpro.MainActivity"
-            android:exported="true" />
+            android:exported="true">
 
             <intent-filter>
-                <action android:name="android.intent.action.MAIN">
+                <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
