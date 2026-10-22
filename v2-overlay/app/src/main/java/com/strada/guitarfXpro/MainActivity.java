@@ -661,7 +661,7 @@ ampButton = addButton(
                     output[i] = (short) (x * 32767.0f);
                 }
 
-                if (count > 0) {
+                    if (count > 0) {
                     int written = track.write(output, 0, count);
                     if (written < 0) {
                         throw new IllegalStateException(
@@ -670,7 +670,8 @@ ampButton = addButton(
                     }
                 }
             }
-        } catch (Exception e) {
+        } 
+        catch (Exception e) {
             runOnUiThread(() -> {
                 toast("Audio error: " + e.getMessage());
                 statusLabel.setText("Status: audio error");
@@ -708,7 +709,7 @@ ampButton = addButton(
         }
     }
     
-private TextView section(String title) {
+    private TextView section(String title) {
     TextView t = new TextView(this);
     t.setText(title);
     t.setTextSize(13);
@@ -790,15 +791,13 @@ private TextView section(String title) {
         );
     }
 
-    (SeekBar seekBar) {}
-
 @Override
-protected void onDestroy() {
+    protected void onDestroy() {
     audioRunning = false;
     super.onDestroy();
 }
 
-private void addAmpToneControl(LinearLayout parent, float initialValue) {
+    private void addAmpToneControl(LinearLayout parent, float initialValue) {
     SeekBar bar = new SeekBar(this);
     bar.setMax(100);
     bar.setProgress(Math.max(0, Math.min(100, (int) initialValue)));
