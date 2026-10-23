@@ -1,22 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Input audio dari mikrofon HP -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <uses-permission
-        android:name="android.permission.BLUETOOTH"
-        android:maxSdkVersion="30" />
+    <!-- Menjaga perangkat tetap aktif ketika diperlukan -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <uses-permission
-        android:name="android.permission.BLUETOOTH_ADMIN"
-        android:maxSdkVersion="30" />
+    <!-- Dukungan host USB bersifat opsional -->
+    <uses-feature
+        android:name="android.hardware.usb.host"
+        android:required="false" />
 
-    <uses-permission
-        android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="false" />
 
     <application
         android:allowBackup="true"
         android:label="Strada Guitar FX Pro"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:usesCleartextTraffic="false">
 
         <activity
             android:name="com.strada.guitarfXpro.MainActivity"
@@ -28,6 +33,7 @@
             </intent-filter>
 
         </activity>
+
     </application>
 
 </manifest>
