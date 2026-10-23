@@ -103,6 +103,10 @@ public class MainActivity extends Activity {
     private volatile String selectedInput = "Microphone (HP)";
     private volatile String selectedOutput = "System / Headphone";
 
+    private LinearLayout pageContainer;
+    private LinearLayout bottomNavigation;
+    private String currentPage = "HOME";
+
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().setStatusBarColor(BG);
