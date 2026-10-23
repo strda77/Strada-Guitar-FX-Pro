@@ -15,11 +15,15 @@ permissions:
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
+    name: Build ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: ubuntu-22.04
+            platform: linux
 
     runs-on: ${{ matrix.os }}
 
@@ -38,18 +42,52 @@ jobs:
         run: |
           mkdir -p build/classes
           find desktop/src/main/java -name "*.java" > sources.txt
+          test -s sources.txt
           javac -encoding UTF-8 -d build/classes @sources.txt
 
-      - name: Package runnable JAR
+      - name: Create runnable JAR
         shell: bash
         run: |
           jar --create --file build/StradaDesktop.jar \
             --main-class com.strada.desktop.StradaDesktop \
             -C build/classes .
 
-      - name: Upload desktop artifact
+      - name: Package Windows installer
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          jpackage `
+            --type exe `
+            --name "Strada Guitar FX Pro" `
+            --app-version 0.1.0 `
+            --input build `
+            --main-jar StradaDesktop.jar `
+            --main-class com.strada.desktop.StradaDesktop `
+            --dest build/installer `
+            --win-menu `
+            --win-shortcut
+
+      - name: Install Linux packaging tools
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fakeroot
+
+      - name: Package Linux installer
+        if: matrix.platform == 'linux'
+        run: |
+          jpackage \
+            --type deb \
+            --name strada-guitar-fx-pro \
+            --app-version 0.1.0 \
+            --input build \
+            --main-jar StradaDesktop.jar \
+            --main-class com.strada.desktop.StradaDesktop \
+            --dest build/installer
+
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Strada-Desktop-${{ matrix.os }}
-          path: build/StradaDesktop.jar
+          name: Strada-Desktop-Installer-${{ matrix.platform }}
+          path: build/installer/*
           if-no-files-found: error
