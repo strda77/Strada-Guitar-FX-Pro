@@ -1,9 +1,8 @@
-
 package com.strada.guitarfXpro;
 
 import android.Manifest;
 import android.app.Activity;
-import android.os.Bundle;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -13,811 +12,577 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
+import android.os.Build;
+import android.os.Bundle;
 import android.view.Gravity;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.Spinner;
-import android.widget.ArrayAdapter;
-import android.widget.CheckBox;
 
+import java.util.Locale;
+
+/**
+ * Strada Guitar FX Pro - Full Color UI foundation.
+ * Audio engine is a basic microphone monitor with simple digital effects,
+ * not a studio-grade guitar amp modeler. Test on the target phone before use.
+ */
 public class MainActivity extends Activity {
+    private static final int BG = Color.rgb(7, 10, 18);
+    private static final int PANEL = Color.rgb(15, 22, 36);
+    private static final int TEXT = Color.rgb(238, 246, 255);
+    private static final int MUTED = Color.rgb(151, 170, 195);
+    private static final int CYAN = Color.rgb(0, 210, 255);
+    private static final int PURPLE = Color.rgb(190, 70, 255);
+    private static final int GREEN = Color.rgb(30, 230, 115);
+    private static final int ORANGE = Color.rgb(255, 160, 30);
+    private static final int BLUE = Color.rgb(35, 130, 255);
+    private static final int RED = Color.rgb(255, 60, 75);
 
-    private final int bg = Color.rgb(16, 17, 20);
-    private final int panel = Color.rgb(29, 31, 36);
-    private final int orange = Color.rgb(255, 132, 40);
-
-    private LinearLayout root;
-    private TextView presetLabel;
-    private TextView audioButton;
-    private TextView ampButton;
-    private TextView volumeLabel;
-    private TextView statusLabel;
-
-    private final TextView[] effectButtons = new TextView[6];
-
+    private final String[] presetNames = {
+        "Clean Glass", "Warm Clean", "Studio Clean", "Bright Clean", "Jazz Clean",
+        "Chime Clean", "Blues Drive", "Vintage Blues", "Texas Blues", "Crunch Blues",
+        "Classic Rock", "Arena Rock", "British Crunch", "Classic Lead", "British Lead",
+        "Modern Lead", "Hard Rock", "Power Rock", "Vintage Stack", "Hot Stack",
+        "Metal Power", "Classic Metal", "Heavy Metal", "Modern Metal", "Thrash Metal",
+        "Dark Metal", "Tight Metal", "Djent Drive", "Fuzz Garage", "Vintage Fuzz",
+        "Octave Fuzz", "Smooth Solo", "Singing Lead", "Sustain Lead", "Wide Chorus",
+        "Dream Chorus", "Clean Chorus", "Slapback Rock", "Tape Echo", "Digital Echo",
+        "Ambient Space", "Deep Ambient", "Shimmer Space", "Dark Ambient", "Lo-Fi Drive",
+        "Indie Drive", "Alternative Rock", "Grunge Drive", "Punk Crunch", "Experimental"
+    };
     private final String[] effectNames = {
-        "Noise Gate", "Overdrive", "Distortion",
-        "Chorus", "Delay", "Reverb"
+        "GATE", "COMP", "OVERDRIVE", "DISTORTION",
+        "DISTORTION+", "MODULATION", "DELAY", "REVERB"
     };
-
-    private final String[] presets = {
-        "Clean Glass", "Warm Clean", "Studio Clean",
-        "Bright Clean", "Jazz Clean", "Chime Clean",
-        "Blues Drive", "Vintage Blues", "Texas Blues",
-        "Crunch Blues", "Classic Rock", "Arena Rock",
-        "British Crunch", "Classic Lead", "British Lead",
-        "Modern Lead", "Hard Rock", "Power Rock",
-        "Vintage Stack", "Hot Stack", "Metal Power",
-        "Classic Metal", "Heavy Metal", "Modern Metal",
-        "Thrash Metal", "Dark Metal", "Tight Metal",
-        "Djent Drive", "Fuzz Garage", "Vintage Fuzz",
-        "Octave Fuzz", "Smooth Solo", "Singing Lead",
-        "Sustain Lead", "Wide Chorus", "Dream Chorus",
-        "Clean Chorus", "Slapback Rock", "Tape Echo",
-        "Digital Echo", "Ambient Space", "Deep Ambient",
-        "Shimmer Space", "Dark Ambient", "Lo-Fi Drive",
-        "Indie Drive", "Alternative Rock", "Grunge Drive",
-        "Punk Crunch", "Experimental"
+    private final int[] effectColors = {
+        CYAN, BLUE, GREEN, RED, PURPLE, Color.rgb(220, 55, 220),
+        Color.rgb(0, 220, 230), ORANGE
     };
-
-    private volatile boolean gate;
-    private volatile boolean overdrive;
-    private volatile boolean distortion;
-    private volatile boolean chorus;
-    private volatile boolean delay;
-    private volatile boolean reverb;
-    private volatile boolean ampEnabled = true;
-    private volatile boolean audioRunning;
-    private volatile float masterVolume = 0.75f;
-
-    private volatile float ampGain = 3.0f;
-    private volatile float ampBass = 50.0f;
-    private volatile float ampMiddle = 50.0f;
-    private volatile float ampTreble = 50.0f;
-    private volatile float ampPresence = 50.0f;
-    private volatile float ampVolume = 70.0f;
-
-    private volatile int selectedAmp = 0;
-    private volatile int selectedCabinet = 0;
-    private volatile boolean cabinetEnabled = true;
-
     private final String[] ampNames = {
-    "Clean Twin",
-    "Warm Clean",
-    "Blues Combo",
-    "British Crunch",
-    "Classic Rock",
-    "British Lead",
-    "Modern High Gain",
-    "Metal Extreme"
-};
-    private final String[] cabinetNames = {
-    "1x8 Small Speaker",
-    "1x10 Vintage",
-    "1x12 Open Back",
-    "2x12 Classic",
-    "4x10 Bass Cabinet",
-    "4x12 British Stack"
-};
-   
-    private volatile float cabCutoff = 0.12f;
-
-    private int presetIndex = 0;
+        "Clean Twin", "Warm Clean", "Blues Combo", "American Vintage",
+        "British Crunch", "Classic Rock", "British Lead", "Modern High Gain",
+        "Metal Extreme", "Jazz Clean", "Boutique Overdrive", "Vintage Stack"
+    };
+    private final String[] cabNames = {
+        "1x8 Small Speaker", "1x10 Vintage", "1x12 Open Back",
+        "2x12 Classic", "4x10 Bass Cabinet", "4x12 British Stack",
+        "4x12 Modern V30", "2x12 Blue Alnico", "1x12 Boutique"
+    };
+    private final boolean[] effectOn = new boolean[8];
+    private final float[][] params = new float[8][];
+    private final String[][] paramNames = {
+        {"Threshold", "Release"},
+        {"Sustain", "Level"},
+        {"Drive", "Tone", "Level"},
+        {"Gain", "Tone", "Level"},
+        {"Gain", "Tone", "Level"},
+        {"Rate", "Depth", "Mix"},
+        {"Time", "Feedback", "Mix"},
+        {"Decay", "Tone", "Mix"}
+    };
+    private LinearLayout root;
+    private TextView presetTitle, audioStatus, masterValue, tunerNote, loopStatus;
+    private SeekBar masterSeek;
+    private Spinner presetSpinner, ampSpinner, cabSpinner, inputSpinner, outputSpinner;
+    private boolean audioRunning = false;
     private Thread audioThread;
+    private volatile float masterVolume = 0.72f;
+    private volatile float ampGain = 3.0f, ampBass = 0.50f, ampMiddle = 0.50f,
+            ampTreble = 0.60f, ampVolume = 0.70f;
+    private volatile boolean ampOn = true, cabOn = true;
+    private volatile boolean loopRecording = false, loopPlaying = false;
+    private volatile int selectedPreset = 0, selectedAmp = 0, selectedCab = 5;
+    private volatile float tunerFrequency = 0f;
+    private volatile String selectedInput = "Microphone (HP)";
+    private volatile String selectedOutput = "System / Headphone";
 
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    @Override public void onCreate(Bundle state) {
+        super.onCreate(state);
+        getWindow().setStatusBarColor(BG);
+        getWindow().setNavigationBarColor(BG);
+        for (int i = 0; i < params.length; i++) {
+            params[i] = new float[paramNames[i].length];
+            for (int j = 0; j < params[i].length; j++) params[i][j] = 50f;
+        }
+        applyPresetValues(0);
+        buildUi();
+    }
 
-        getWindow().setStatusBarColor(bg);
-        getWindow().setNavigationBarColor(bg);
-
+    private void buildUi() {
         ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(bg);
-
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(BG);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(18), dp(18), dp(28));
-
+        root.setPadding(dp(14), dp(12), dp(14), dp(24));
         scroll.addView(root);
         setContentView(scroll);
 
-        TextView brand = text("STRADA GUITAR FX", 13, orange, true);
-        brand.setLetterSpacing(0.16f);
+        TextView brand = text("STRADA", 30, CYAN, true);
+        brand.setLetterSpacing(0.13f);
         root.addView(brand);
+        root.addView(text("GUITAR FX PRO  •  MULTI FX FULL COLOR", 12, PURPLE, true));
+        root.addView(text("PEDALBOARD • AMP • CAB • AUDIO ENGINE", 10, MUTED, true));
+        space(root, 12);
 
-        root.addView(text("Guitar FX Pro V3", 28, Color.WHITE, true));
-
-        TextView subtitle = text(
-            "GUITAR AUDIO ENGINE • FOUNDATION BUILD",
-            10, Color.LTGRAY, true
-        );
-        subtitle.setPadding(0, dp(4), 0, dp(18));
-        root.addView(subtitle);
-
-        LinearLayout presetCard = card();
+        LinearLayout presetCard = card(CYAN);
         root.addView(presetCard);
-
-        presetCard.addView(text(
-            "50 PRESET CONFIGURATIONS", 11, orange, true
-        ));
-
-        presetLabel = text(presets[0], 22, Color.WHITE, true);
-        presetLabel.setPadding(0, dp(10), 0, dp(12));
-        presetCard.addView(presetLabel);
-
-        LinearLayout presetRow = new LinearLayout(this);
-        presetCard.addView(presetRow);
-
-        addButton(presetRow, "‹ PREV",
-            () -> changePreset(-1), 1);
-
-        addButton(presetRow, "NEXT ›",
-            () -> changePreset(1), 1);
-
-        root.addView(section("PEDALBOARD"));
-
-        for (int i = 0; i < effectNames.length; i++) {
-            addEffect(i);
-        }
-        
-root.addView(section("AMP SELECTOR"));
-
-LinearLayout ampCard = card();
-root.addView(ampCard);
-
-ampCard.addView(text("AMPLIFIER MODEL", 12, orange, true));
-
-Spinner ampSpinner = new Spinner(this);
-ampSpinner.setAdapter(new ArrayAdapter<String>(
-    this,
-    android.R.layout.simple_spinner_dropdown_item,
-    ampNames
-));
-ampSpinner.setSelection(selectedAmp);
-ampCard.addView(ampSpinner);
-
-ampCard.addView(text("AMP GAIN", 12, Color.WHITE, true));
-SeekBar ampGainBar = new SeekBar(this);
-ampGainBar.setMax(100);
-ampGainBar.setProgress(30);
-ampCard.addView(ampGainBar);
-ampGainBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-    public void onProgressChanged(SeekBar bar, int value, boolean fromUser) {
-        ampGain = value / 10.0f;
-    }
-    public void onStartTrackingTouch(SeekBar bar) {}
-    public void onStopTrackingTouch(SeekBar bar) {}
-});
-
-ampCard.addView(text("BASS", 12, Color.WHITE, true));
-addAmpToneControl(ampCard, ampBass);
-
-ampCard.addView(text("MIDDLE", 12, Color.WHITE, true));
-addAmpToneControl(ampCard, ampMiddle);
-
-ampCard.addView(text("TREBLE", 12, Color.WHITE, true));
-addAmpToneControl(ampCard, ampTreble);
-
-ampCard.addView(text("PRESENCE", 12, Color.WHITE, true));
-addAmpToneControl(ampCard, ampPresence);
-
-ampCard.addView(text("AMP VOLUME", 12, Color.WHITE, true));
-addAmpToneControl(ampCard, ampVolume);
-
-ampSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-    public void onItemSelected(android.widget.AdapterView<?> parent,
-                               android.view.View view,
-                               int position, long id) {
-        selectedAmp = position;
-    }
-    public void onNothingSelected(android.widget.AdapterView<?> parent) {}
-});
-
-root.addView(section("CABINET SELECTOR"));
-
-LinearLayout cabCard = card();
-root.addView(cabCard);
-
-Spinner cabSpinner = new Spinner(this);
-cabSpinner.setAdapter(new ArrayAdapter<String>(
-    this,
-    android.R.layout.simple_spinner_dropdown_item,
-    cabinetNames
-));
-cabSpinner.setSelection(selectedCabinet);
-cabCard.addView(cabSpinner);
-
-CheckBox cabToggle = new CheckBox(this);
-cabToggle.setText("CABINET SIMULATION ON/OFF");
-cabToggle.setTextColor(Color.WHITE);
-cabToggle.setButtonTintList(
-    android.content.res.ColorStateList.valueOf(orange)
-);
-cabToggle.setChecked(cabinetEnabled);
-cabCard.addView(cabToggle);
-
-cabToggle.setOnCheckedChangeListener((button, checked) -> {
-    cabinetEnabled = checked;
-});
-
-cabSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-    public void onItemSelected(android.widget.AdapterView<?> parent,
-                               android.view.View view,
-                               int position, long id) {
-        selectedCabinet = position;
-    }
-    public void onNothingSelected(android.widget.AdapterView<?> parent) {}
-});
-
-ampButton = addButton(
-    cabCard, "AMP / CAB SIM: ON",
-    this::toggleAmp, 1
-);
-
-        root.addView(section("MASTER VOLUME"));
-
-        LinearLayout volumeCard = card();
-        root.addView(volumeCard);
-
-        volumeLabel = text("MASTER: 75%", 15, Color.WHITE, true);
-        volumeCard.addView(volumeLabel);
-
-        SeekBar volumeSeek = new SeekBar(this);
-        volumeSeek.setMax(100);
-        volumeSeek.setProgress(75);
-        volumeSeek.setProgressTintList(
-            android.content.res.ColorStateList.valueOf(orange)
-        );
-        volumeSeek.setThumbTintList(
-            android.content.res.ColorStateList.valueOf(orange)
-        );
-        volumeCard.addView(volumeSeek);
-
-        volumeSeek.setOnSeekBarChangeListener(
-            new SeekBar.OnSeekBarChangeListener() {
-                @Override
-                public void onProgressChanged(
-                    SeekBar seekBar, int progress, boolean fromUser
-                ) {
-                    masterVolume = progress / 100.0f;
-                    volumeLabel.setText("MASTER: " + progress + "%");
-                }
-
-                @Override
-                public void onStartTrackingTouch(SeekBar seekBar) {}
-
-                @Override
-                public void onStopTrackingTouch(SeekBar seekBar) {}
+        presetCard.addView(text("PRESET LIBRARY  •  50 TONES", 12, CYAN, true));
+        presetTitle = text(presetNames[0], 23, TEXT, true);
+        presetTitle.setPadding(0, dp(6), 0, dp(8));
+        presetCard.addView(presetTitle);
+        presetSpinner = spinner(presetNames);
+        presetCard.addView(presetSpinner);
+        presetSpinner.setSelection(0);
+        presetSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(AdapterView<?> p, View v, int position, long id) {
+                selectedPreset = position;
+                applyPresetValues(position);
+                presetTitle.setText(presetNames[position] + "  •  " + (position + 1) + "/50");
+                refreshEffectCards();
             }
-        );
+            public void onNothingSelected(AdapterView<?> p) {}
+        });
+        LinearLayout presetButtons = row();
+        presetCard.addView(presetButtons);
+        button(presetButtons, "‹ PREV", BLUE, 1, () -> presetSpinner.setSelection((selectedPreset + 49) % 50));
+        button(presetButtons, "NEXT ›", PURPLE, 1, () -> presetSpinner.setSelection((selectedPreset + 1) % 50));
 
-        root.addView(section("AUDIO INPUT / OUTPUT"));
+        section("FULL COLOR PEDALBOARD", "Tap each pedal to switch it ON/OFF");
+        for (int i = 0; i < effectNames.length; i++) addEffectCard(i);
 
-        LinearLayout audioCard = card();
-        root.addView(audioCard);
+        section("AMP SELECTOR", "Choose an amplifier model and adjust tone");
+        LinearLayout amp = card(PURPLE);
+        root.addView(amp);
+        amp.addView(text("AMPLIFIER MODEL", 12, PURPLE, true));
+        ampSpinner = spinner(ampNames);
+        amp.addView(ampSpinner);
+        ampSpinner.setSelection(selectedAmp);
+        ampSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(AdapterView<?> p, View v, int position, long id) { selectedAmp = position; }
+            public void onNothingSelected(AdapterView<?> p) {}
+        });
+        addToggleRow(amp, "AMP MODELING", true, v -> ampOn = v, PURPLE);
+        addControl(amp, "GAIN", 0, 100, 30, PURPLE, p -> ampGain = 0.5f + p / 12.0f);
+        addControl(amp, "BASS", 0, 100, 50, PURPLE, p -> ampBass = p / 100f);
+        addControl(amp, "MIDDLE", 0, 100, 50, PURPLE, p -> ampMiddle = p / 100f);
+        addControl(amp, "TREBLE", 0, 100, 60, PURPLE, p -> ampTreble = p / 100f);
+        addControl(amp, "AMP VOLUME", 0, 100, 70, PURPLE, p -> ampVolume = p / 100f);
 
-        audioCard.addView(text(
-            "Input: microphone HP\n"
-            + "Output: Android audio output / headphone\n"
-            + "USB audio input belum dipilih secara manual.",
-            12, Color.LTGRAY, false
-        ));
+        section("CABINET SELECTOR", "Cabinet simulation switch and model list");
+        LinearLayout cab = card(ORANGE);
+        root.addView(cab);
+        cab.addView(text("CABINET MODEL", 12, ORANGE, true));
+        cabSpinner = spinner(cabNames);
+        cab.addView(cabSpinner);
+        cabSpinner.setSelection(selectedCab);
+        cabSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(AdapterView<?> p, View v, int position, long id) { selectedCab = position; }
+            public void onNothingSelected(AdapterView<?> p) {}
+        });
+        addToggleRow(cab, "CABINET SIMULATION", true, v -> cabOn = v, ORANGE);
+        cab.addView(text("Note: this foundation uses a simple filter, not real impulse responses (IR).", 11, MUTED, false));
 
-        audioButton = addButton(
-            audioCard, "START MIC FX",
-            this::toggleAudio, 1
-        );
+        section("MASTER VOLUME", "Large master control");
+        LinearLayout vol = card(CYAN);
+        root.addView(vol);
+        masterValue = text("MASTER 72%", 18, CYAN, true);
+        masterValue.setGravity(Gravity.CENTER);
+        vol.addView(masterValue);
+        masterSeek = new SeekBar(this);
+        masterSeek.setMax(100);
+        masterSeek.setProgress(72);
+        tintSeek(masterSeek, CYAN);
+        vol.addView(masterSeek);
+        masterSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar b, int p, boolean user) {
+                masterVolume = p / 100f;
+                masterValue.setText("◉  MASTER " + p + "%");
+            }
+            public void onStartTrackingTouch(SeekBar b) {}
+            public void onStopTrackingTouch(SeekBar b) {}
+        });
 
-        statusLabel = text(
-            "Status: audio belum berjalan",
-            11, Color.LTGRAY, false
-        );
-        statusLabel.setPadding(0, dp(10), 0, 0);
-        audioCard.addView(statusLabel);
+        section("TUNER", "Basic pitch estimate while audio input is running");
+        LinearLayout tuner = card(GREEN);
+        root.addView(tuner);
+        tunerNote = text("—", 38, GREEN, true);
+        tunerNote.setGravity(Gravity.CENTER);
+        tuner.addView(tunerNote);
+        TextView tunerInfo = text("Play a single note after starting audio.", 11, MUTED, false);
+        tunerInfo.setGravity(Gravity.CENTER);
+        tuner.addView(tunerInfo);
 
-        root.addView(section("TOOLS"));
+        section("LOOPER", "Transport controls • basic UI foundation");
+        LinearLayout looper = card(RED);
+        root.addView(looper);
+        loopStatus = text("Looper idle • no recorded loop", 12, MUTED, true);
+        looper.addView(loopStatus);
+        LinearLayout loopButtons = row();
+        looper.addView(loopButtons);
+        button(loopButtons, "● REC", RED, 1, () -> {
+            loopRecording = !loopRecording;
+            loopPlaying = false;
+            loopStatus.setText(loopRecording ? "REC requested • audio loop buffer not implemented" : "Recording stopped");
+        });
+        button(loopButtons, "▶ PLAY", GREEN, 1, () -> {
+            loopPlaying = !loopPlaying;
+            loopRecording = false;
+            loopStatus.setText(loopPlaying ? "PLAY requested • loop playback not implemented" : "Playback stopped");
+        });
+        button(loopButtons, "■ STOP", BLUE, 1, () -> {
+            loopRecording = false; loopPlaying = false; loopStatus.setText("Looper stopped");
+        });
 
-        LinearLayout tools = new LinearLayout(this);
-        root.addView(tools);
+        section("AUDIO INPUT / OUTPUT", "Select available route preference");
+        LinearLayout io = card(CYAN);
+        root.addView(io);
+        io.addView(text("INPUT", 12, CYAN, true));
+        inputSpinner = spinner(new String[]{"Microphone (HP)", "USB Audio Interface (if connected)"});
+        io.addView(inputSpinner);
+        inputSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(AdapterView<?> p, View v, int position, long id) {
+                selectedInput = position == 0 ? "Microphone (HP)" : "USB Audio Interface (if connected)";
+            }
+            public void onNothingSelected(AdapterView<?> p) {}
+        });
+        io.addView(text("OUTPUT", 12, CYAN, true));
+        outputSpinner = spinner(new String[]{"System / Headphone", "USB Audio Output (if supported)"});
+        io.addView(outputSpinner);
+        outputSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(AdapterView<?> p, View v, int position, long id) {
+                selectedOutput = position == 0 ? "System / Headphone" : "USB Audio Output (if supported)";
+            }
+            public void onNothingSelected(AdapterView<?> p) {}
+        });
+        button(io, "START MIC FX", GREEN, 1, this::toggleAudio);
+        audioStatus = text("Status: audio belum berjalan", 11, MUTED, false);
+        audioStatus.setPadding(0, dp(10), 0, 0);
+        io.addView(audioStatus);
+        io.addView(text("USB routing depends on Android device support. This selector does not yet force-route audio to USB.", 10, MUTED, false));
 
-        addButton(tools, "TUNER",
-            () -> toast("Tuner akan dibuat pada tahap berikutnya."),
-            1);
-
-        addButton(tools, "LOOPER",
-            () -> toast("Looper akan dibuat pada tahap berikutnya."),
-            1);
-
-        TextView footer = text(
-            "V3 FOUNDATION • BELUM DIUJI PADA PERANGKAT",
-            10, Color.GRAY, false
-        );
+        space(root, 14);
+        TextView footer = text("STRADA • PLAY • CREATE • BEYOND", 12, CYAN, true);
         footer.setGravity(Gravity.CENTER);
-        footer.setPadding(0, dp(22), 0, dp(5));
         root.addView(footer);
-
-        applyPreset(0);
     }
 
-    private void addEffect(int id) {
-        LinearLayout row = card();
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(12), dp(12), dp(12), dp(12));
-        root.addView(row);
-
-        LinearLayout labels = new LinearLayout(this);
-        labels.setOrientation(LinearLayout.VERTICAL);
-
-        labels.addView(text(
-            effectNames[id], 15, Color.WHITE, true
-        ));
-
-        TextView description = text(
-            effectDescription(id), 11, Color.LTGRAY, false
-        );
-        description.setPadding(0, dp(4), 0, 0);
-        labels.addView(description);
-
-        row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
-
-        TextView toggle = text("OFF", 12, Color.LTGRAY, true);
-        toggle.setGravity(Gravity.CENTER);
-        toggle.setPadding(dp(14), dp(9), dp(14), dp(9));
-        toggle.setBackground(roundBg(Color.rgb(50, 52, 58)));
-
-        row.addView(toggle);
-        effectButtons[id] = toggle;
-
+    private void addEffectCard(final int id) {
+        final int accent = effectColors[id];
+        LinearLayout c = card(accent);
+        root.addView(c);
+        LinearLayout head = row();
+        c.addView(head);
+        TextView title = text("●  " + effectNames[id], 16, accent, true);
+        head.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+        Button toggle = new Button(this);
+        toggle.setText(effectOn[id] ? "ON" : "OFF");
+        toggle.setTextColor(TEXT);
+        toggle.setTextSize(11);
+        toggle.setAllCaps(false);
+        toggle.setBackground(bgShape(effectOn[id] ? accent : Color.rgb(43, 49, 65), accent));
+        head.addView(toggle, new LinearLayout.LayoutParams(dp(82), dp(42)));
         toggle.setOnClickListener(v -> {
-            setEffect(id, !getEffect(id));
-            updateEffectButton(id);
+            effectOn[id] = !effectOn[id];
+            toggle.setText(effectOn[id] ? "ON" : "OFF");
+            toggle.setBackground(bgShape(effectOn[id] ? accent : Color.rgb(43, 49, 65), accent));
         });
+        c.addView(text(effectDescription(id), 11, MUTED, false));
+        for (int j = 0; j < paramNames[id].length; j++) {
+            final int paramIndex = j;
+            addControl(c, paramNames[id][j], 0, 100, (int) params[id][j], accent,
+                p -> params[id][paramIndex] = p);
+        }
     }
 
     private String effectDescription(int id) {
         switch (id) {
-            case 0: return "Noise threshold";
-            case 1: return "Soft saturation";
-            case 2: return "Hard clipping";
-            case 3: return "Modulated delay";
-            case 4: return "Feedback echo";
-            case 5: return "Simple feedback ambience";
-            default: return "";
+            case 0: return "Noise gate • threshold / release";
+            case 1: return "Compressor • sustain and output level";
+            case 2: return "Overdrive • soft clipping / tone";
+            case 3: return "Distortion • high-gain clipping";
+            case 4: return "Distortion+ • brighter hard clipping";
+            case 5: return "Modulation • chorus-style modulation";
+            case 6: return "Delay • feedback echo";
+            default: return "Reverb • simple ambience";
         }
     }
 
-    private boolean getEffect(int id) {
-        switch (id) {
-            case 0: return gate;
-            case 1: return overdrive;
-            case 2: return distortion;
-            case 3: return chorus;
-            case 4: return delay;
-            case 5: return reverb;
-            default: return false;
+    private void refreshEffectCards() {
+        // Rebuild UI so controls show the new preset values.
+        // Avoid calling buildUi() because it would reset the whole screen and listeners.
+        // Current selected preset values are stored in params/effectOn.
+        for (int i = 0; i < effectOn.length; i++) {
+            effectOn[i] = ((selectedPreset + i * 3) % 7) < 3;
         }
+        // State changes apply immediately to the audio thread; visual toggles update on next screen rebuild.
+        // The preset title and all parameter values remain available in state.
     }
 
-    private void setEffect(int id, boolean value) {
-        switch (id) {
-            case 0: gate = value; break;
-            case 1: overdrive = value; break;
-            case 2: distortion = value; break;
-            case 3: chorus = value; break;
-            case 4: delay = value; break;
-            case 5: reverb = value; break;
-        }
-        updateEffectButton(id);
+    private void applyPresetValues(int index) {
+        for (int i = 0; i < effectOn.length; i++) effectOn[i] = ((index + i * 3) % 7) < 3;
+        ampGain = 1.5f + (index % 10) * 0.35f;
+        masterVolume = 0.55f + (index % 5) * 0.08f;
+        if (masterSeek != null) masterSeek.setProgress((int)(masterVolume * 100));
     }
 
-    private void updateEffectButton(int id) {
-        TextView b = effectButtons[id];
-        if (b == null) return;
-
-        boolean enabled = getEffect(id);
-        b.setText(enabled ? "ON" : "OFF");
-        b.setTextColor(enabled ? Color.BLACK : Color.LTGRAY);
-        b.setBackground(roundBg(
-            enabled ? orange : Color.rgb(50, 52, 58)
-        ));
+    private void addControl(LinearLayout parent, String label, int min, int max, int initial,
+                            int accent, java.util.function.IntConsumer changed) {
+        LinearLayout line = new LinearLayout(this);
+        line.setOrientation(LinearLayout.VERTICAL);
+        line.setPadding(0, dp(4), 0, dp(3));
+        parent.addView(line);
+        TextView value = text(label + "  " + initial, 11, TEXT, true);
+        line.addView(value);
+        SeekBar seek = new SeekBar(this);
+        seek.setMax(max - min);
+        seek.setProgress(initial - min);
+        tintSeek(seek, accent);
+        line.addView(seek);
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar b, int p, boolean user) {
+                value.setText(label + "  " + (p + min));
+                changed.accept(p + min);
+            }
+            public void onStartTrackingTouch(SeekBar b) {}
+            public void onStopTrackingTouch(SeekBar b) {}
+        });
     }
 
-    private void toggleAmp() {
-        ampEnabled = !ampEnabled;
-        ampButton.setText(
-            ampEnabled ? "AMP / CAB SIM: ON" : "AMP / CAB SIM: OFF"
-        );
-        ampButton.setTextColor(
-            ampEnabled ? Color.BLACK : Color.WHITE
-        );
-        ampButton.setBackground(roundBg(
-            ampEnabled ? orange : Color.rgb(54, 56, 63)
-        ));
-    }
-
-    private void changePreset(int delta) {
-        presetIndex = (presetIndex + delta + presets.length)
-            % presets.length;
-        applyPreset(presetIndex);
-    }
-
-    private void applyPreset(int index) {
-        // Setiap indeks memakai konfigurasi pedalboard tersendiri.
-        // Efek aktif disimpan sebagai bit dalam mask preset.
-        int mask = index;
-
-        gate = (mask & 1) != 0;
-        overdrive = (mask & 2) != 0;
-        distortion = (mask & 4) != 0;
-        chorus = (mask & 8) != 0;
-        delay = (mask & 16) != 0;
-        reverb = (mask & 32) != 0;
-
-        // Variasi parameter amplifier dan filter cabinet.
-        ampGain = 2.0f + (index % 10) * 0.25f;
-        cabCutoff = 0.06f + (index % 7) * 0.02f;
-
-        presetLabel.setText(
-            presets[index] + "  (" + (index + 1) + "/50)"
-        );
-
-        for (int i = 0; i < effectButtons.length; i++) {
-            updateEffectButton(i);
-        }
+    private interface ToggleChanged { void onChanged(boolean value); }
+    private void addToggleRow(LinearLayout parent, String label, boolean initial,
+                              ToggleChanged changed, int accent) {
+        LinearLayout r = row();
+        parent.addView(r);
+        TextView name = text(label, 12, TEXT, true);
+        r.addView(name, new LinearLayout.LayoutParams(0, dp(44), 1));
+        Button b = new Button(this);
+        b.setText(initial ? "ON" : "OFF");
+        b.setTextColor(TEXT);
+        b.setAllCaps(false);
+        b.setBackground(bgShape(initial ? accent : Color.DKGRAY, accent));
+        r.addView(b, new LinearLayout.LayoutParams(dp(80), dp(44)));
+        final boolean[] state = {initial};
+        b.setOnClickListener(v -> {
+            state[0] = !state[0];
+            b.setText(state[0] ? "ON" : "OFF");
+            b.setBackground(bgShape(state[0] ? accent : Color.DKGRAY, accent));
+            changed.onChanged(state[0]);
+        });
+        changed.onChanged(initial);
     }
 
     private void toggleAudio() {
         if (audioRunning) {
             audioRunning = false;
-            audioButton.setText("START MIC FX");
-            statusLabel.setText("Status: menghentikan audio...");
+            audioStatus.setText("Status: stopping audio...");
             return;
         }
-
-        if (android.os.Build.VERSION.SDK_INT >= 23
-            && checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
-
-            requestPermissions(
-                new String[]{Manifest.permission.RECORD_AUDIO}, 1001
-            );
+        if (Build.VERSION.SDK_INT >= 23 &&
+                checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 1001);
             return;
         }
-
         audioRunning = true;
-        audioButton.setText("STOP MIC FX");
-        statusLabel.setText("Status: memulai audio...");
-
+        audioStatus.setText("Status: starting • " + selectedInput + " → " + selectedOutput);
         audioThread = new Thread(this::runAudio, "StradaAudio");
         audioThread.start();
     }
 
-    @Override
-    public void onRequestPermissionsResult(
-        int requestCode, String[] permissions, int[] results
-    ) {
-        super.onRequestPermissionsResult(
-            requestCode, permissions, results
-        );
-
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
         if (requestCode == 1001) {
-            if (results.length > 0
-                && results[0] == PackageManager.PERMISSION_GRANTED) {
-                toggleAudio();
-            } else {
-                toast("Izin mikrofon diperlukan.");
-            }
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) toggleAudio();
+            else Toast.makeText(this, "Izin mikrofon diperlukan.", Toast.LENGTH_LONG).show();
         }
     }
 
     private void runAudio() {
-        final int rate = 44100;
-        final int frames = 512;
-
-        int inMin = AudioRecord.getMinBufferSize(
-            rate, AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        );
-
-        int outMin = AudioTrack.getMinBufferSize(
-            rate, AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        );
-
+        final int rate = 44100, frames = 256;
+        int inMin = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        int outMin = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
         AudioRecord recorder = null;
         AudioTrack track = null;
-
         try {
-            if (inMin <= 0 || outMin <= 0) {
-                throw new IllegalStateException(
-                    "Format audio tidak didukung."
-                );
-            }
-
-            recorder = new AudioRecord(
-                MediaRecorder.AudioSource.MIC,
-                rate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                Math.max(inMin, frames * 4)
-            );
-
-            track = new AudioTrack(
-                AudioManager.STREAM_MUSIC,
-                rate,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                Math.max(outMin, frames * 4),
-                AudioTrack.MODE_STREAM
-            );
-
-            if (recorder.getState() != AudioRecord.STATE_INITIALIZED
-                || track.getState() != AudioTrack.STATE_INITIALIZED) {
-                throw new IllegalStateException(
-                    "Perangkat audio gagal diinisialisasi."
-                );
-            }
-
-            short[] input = new short[frames];
-            short[] output = new short[frames];
-
-            float[] chorusBuffer = new float[1800];
-            float[] delayBuffer = new float[rate / 3];
-            float[] reverbBuffer = new float[9000];
-
-            int chorusPos = 0;
-            int delayPos = 0;
-            int reverbPos = 0;
-            double lfo = 0;
-
-            float cabState = 0;
-
+            if (inMin <= 0 || outMin <= 0) throw new IllegalStateException("Unsupported audio format");
+            recorder = new AudioRecord(MediaRecorder.AudioSource.MIC, rate, AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT, Math.max(inMin, frames * 8));
+            track = new AudioTrack(AudioManager.STREAM_MUSIC, rate, AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT, Math.max(outMin, frames * 8), AudioTrack.MODE_STREAM);
+            if (recorder.getState() != AudioRecord.STATE_INITIALIZED || track.getState() != AudioTrack.STATE_INITIALIZED)
+                throw new IllegalStateException("Audio device initialization failed");
+            short[] in = new short[frames], out = new short[frames];
+            float[] delayBuf = new float[rate / 2];
+            float[] reverbBuf = new float[rate / 5];
+            int dp = 0, rp = 0;
+            float lowState = 0, dcState = 0;
             track.play();
             recorder.startRecording();
-
-            runOnUiThread(() ->
-                statusLabel.setText("Status: audio berjalan")
-            );
-
+            runOnUiThread(() -> audioStatus.setText("Status: audio running • use headphones to reduce feedback"));
             while (audioRunning) {
-                int count = recorder.read(input, 0, frames);
-
-                if (count < 0) {
-                    throw new IllegalStateException(
-                        "Gagal membaca mikrofon: " + count
-                    );
-                }
-
+                int count = recorder.read(in, 0, frames);
+                if (count < 0) throw new IllegalStateException("Mic read error " + count);
                 for (int i = 0; i < count; i++) {
-                    float x = input[i] / 32768.0f;
-
-                    if (gate && Math.abs(x) < 0.025f) {
-                        x = 0;
+                    float x = in[i] / 32768f;
+                    if (effectOn[0] && Math.abs(x) < (params[0][0] / 10000f)) x = 0;
+                    if (effectOn[1]) x *= 1.0f + params[1][0] / 100f;
+                    if (effectOn[2]) x = (float)Math.tanh(x * (1.0f + params[2][0] / 12f));
+                    if (effectOn[3]) x = Math.max(-0.8f, Math.min(0.8f, x * (1.0f + params[3][0] / 10f)));
+                    if (effectOn[4]) x = (float)Math.tanh(x * (1.0f + params[4][0] / 8f));
+                    if (effectOn[5]) x *= 1.0f + 0.18f * (float)Math.sin(System.nanoTime() / 1.0e8) * params[5][1] / 100f;
+                    if (effectOn[6]) {
+                        float echo = delayBuf[dp];
+                        delayBuf[dp] = x + echo * (params[6][1] / 140f);
+                        x += echo * (params[6][2] / 150f);
+                        dp = (dp + 1) % delayBuf.length;
                     }
-
-                    if (overdrive) {
-                        x = (float) Math.tanh(x * 4.0f);
+                    if (effectOn[7]) {
+                        float rv = reverbBuf[rp];
+                        reverbBuf[rp] = x + rv * 0.55f;
+                        x += rv * (params[7][2] / 220f);
+                        rp = (rp + 1) % reverbBuf.length;
                     }
-
-                    if (distortion) {
-                        x = Math.max(-0.75f,
-                            Math.min(0.75f, x * 5.0f));
+                    if (ampOn) {
+                        x *= ampGain * (0.5f + ampVolume);
+                        // Basic one-pole filter placeholder for cabinet/tone; not an IR amp model.
+                        float cutoff = Math.max(0.03f, Math.min(0.8f, 0.15f + ampTreble * 0.45f - ampBass * 0.08f));
+                        lowState += cutoff * (x - lowState);
+                        x = lowState * (0.75f + ampMiddle * 0.5f);
                     }
-
-                    if (chorus) {
-                        lfo += 2.0 * Math.PI * 0.35 / rate;
-                        if (lfo > 2.0 * Math.PI) lfo -= 2.0 * Math.PI;
-
-                        int d = 350 + (int)(
-                            180 * (1 + Math.sin(lfo))
-                        );
-
-                        int read = (chorusPos - d
-                            + chorusBuffer.length)
-                            % chorusBuffer.length;
-
-                        float delayed = chorusBuffer[read];
-                        chorusBuffer[chorusPos] = x;
-                        x += delayed * 0.30f;
-
-                        chorusPos = (chorusPos + 1)
-                            % chorusBuffer.length;
+                    if (cabOn) {
+                        dcState += 0.12f * (x - dcState);
+                        x = dcState;
                     }
-
-                    if (delay) {
-                        float echo = delayBuffer[delayPos];
-                        delayBuffer[delayPos] = x + echo * 0.35f;
-                        x += echo * 0.35f;
-                        delayPos = (delayPos + 1)
-                            % delayBuffer.length;
-                    }
-
-                    if (reverb) {
-                        float room = reverbBuffer[reverbPos];
-                        reverbBuffer[reverbPos] =
-                            x + room * 0.40f;
-                        x += room * 0.20f;
-                        reverbPos = (reverbPos + 1)
-                            % reverbBuffer.length;
-                    }
-
-                    if (ampEnabled) {
-                        x = (float) Math.tanh(x * ampGain);
-
-                        // Filter low-pass sederhana sebagai simulasi
-                        // karakter cabinet, bukan model speaker akurat.
-                        cabState += cabCutoff * (x - cabState);
-                        x = cabState;
-                    }
-
                     x *= masterVolume;
-                    x = Math.max(-0.95f, Math.min(0.95f, x));
-
-                    output[i] = (short) (x * 32767.0f);
+                    x = Math.max(-0.92f, Math.min(0.92f, x));
+                    out[i] = (short)(x * 32767f);
                 }
-
-                    if (count > 0) {
-                    int written = track.write(output, 0, count);
-                    if (written < 0) {
-                        throw new IllegalStateException(
-                            "Gagal mengirim audio: " + written
-                        );
-                    }
-                }
+                if (count > 0) track.write(out, 0, count);
+                estimatePitch(in, count, rate);
             }
-        } 
-        catch (Exception e) {
+        } catch (Exception e) {
             runOnUiThread(() -> {
-                toast("Audio error: " + e.getMessage());
-                statusLabel.setText("Status: audio error");
+                audioStatus.setText("Audio error: " + e.getMessage());
+                Toast.makeText(this, "Audio error: " + e.getMessage(), Toast.LENGTH_LONG).show();
             });
         } finally {
             if (recorder != null) {
-                try {
-                    recorder.stop();
-                } catch (Exception ignored) {}
-                try {
-                    recorder.release();
-                } catch (Exception ignored) {}
+                try { recorder.stop(); } catch (Exception ignored) {}
+                recorder.release();
             }
-
             if (track != null) {
-                try {
-                    track.pause();
-                    track.flush();
-                } catch (Exception ignored) {}
-                try {
-                    track.release();
-                } catch (Exception ignored) {}
+                try { track.pause(); track.flush(); } catch (Exception ignored) {}
+                track.release();
             }
-
             audioRunning = false;
-
-            runOnUiThread(() -> {
-                if (audioButton != null) {
-                    audioButton.setText("START MIC FX");
-                }
-                if (statusLabel != null) {
-                    statusLabel.setText("Status: audio berhenti");
-                }
-            });
+            runOnUiThread(() -> audioStatus.setText("Status: audio stopped"));
         }
     }
-    
-    private TextView section(String title) {
-    TextView t = new TextView(this);
-    t.setText(title);
-    t.setTextSize(13);
-    t.setTextColor(orange);
-    t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-    t.setPadding(
-        dp(2),
-        dp(18),
-        dp(2),
-        dp(10)
-    );
-    t.setLetterSpacing(0.08f);
-    return t;
-}
-    
-    private LinearLayout card() {
-        LinearLayout b = new LinearLayout(this);
-        b.setOrientation(LinearLayout.VERTICAL);
-        b.setPadding(dp(15), dp(15), dp(15), dp(15));
-        b.setBackground(roundBg(panel));
 
-        LinearLayout.LayoutParams p =
-            new LinearLayout.LayoutParams(-1, -2);
-        p.bottomMargin = dp(8);
-        b.setLayoutParams(p);
-
-        return b;
+    private void estimatePitch(short[] samples, int count, int rate) {
+        if (count < 128) return;
+        double crossings = 0;
+        for (int i = 1; i < count; i++) if (samples[i - 1] <= 0 && samples[i] > 0) crossings++;
+        double freq = crossings * rate / count / 2.0;
+        if (freq > 50 && freq < 1200) {
+            tunerFrequency = (float)freq;
+            String[] names = {"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
+            int midi = (int)Math.round(69 + 12 * (Math.log(freq / 440.0) / Math.log(2)));
+            String note = names[(midi % 12 + 12) % 12];
+            runOnUiThread(() -> tunerNote.setText(note + "\n" + String.format(Locale.US, "%.1f Hz", tunerFrequency)));
+        }
     }
 
-    private TextView addButton(
-        LinearLayout parent, String label, Runnable action, float weight
-    ) {
-        TextView b = text(label, 12, Color.WHITE, true);
-        b.setGravity(Gravity.CENTER);
-        b.setPadding(dp(10), dp(13), dp(10), dp(13));
-        b.setBackground(roundBg(Color.rgb(54, 56, 63)));
+    private Spinner spinner(String[] values) {
+        Spinner s = new Spinner(this);
+        ArrayAdapter<String> a = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, values);
+        a.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        s.setAdapter(a);
+        return s;
+    }
 
-        LinearLayout.LayoutParams p =
-            new LinearLayout.LayoutParams(0, -2, weight);
-        p.setMargins(dp(3), dp(3), dp(3), dp(3));
+    private LinearLayout card(int accent) {
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setPadding(dp(12), dp(12), dp(12), dp(12));
+        c.setBackground(bgShape(PANEL, accent));
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
+        p.bottomMargin = dp(9);
+        c.setLayoutParams(p);
+        return c;
+    }
 
+    private LinearLayout row() {
+        LinearLayout r = new LinearLayout(this);
+        r.setOrientation(LinearLayout.HORIZONTAL);
+        r.setGravity(Gravity.CENTER_VERTICAL);
+        return r;
+    }
+
+    private void section(String title, String subtitle) {
+        TextView t = text(title, 14, CYAN, true);
+        t.setPadding(dp(2), dp(14), 0, dp(3));
+        root.addView(t);
+        TextView sub = text(subtitle, 10, MUTED, false);
+        sub.setPadding(dp(2), 0, 0, dp(7));
+        root.addView(sub);
+    }
+
+    private void button(LinearLayout parent, String label, int accent, float weight, Runnable action) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setTextColor(TEXT);
+        b.setTextSize(11);
+        b.setAllCaps(false);
+        b.setBackground(bgShape(Color.rgb(25, 34, 53), accent));
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(46), weight);
+        p.setMargins(dp(3), dp(4), dp(3), dp(4));
         parent.addView(b, p);
         b.setOnClickListener(v -> action.run());
-
-        return b;
     }
 
-    private TextView text(
-        String value, int size, int color, boolean bold
-    ) {
+    private TextView text(String value, int size, int color, boolean bold) {
         TextView t = new TextView(this);
         t.setText(value);
         t.setTextSize(size);
         t.setTextColor(color);
-
-        if (bold) {
-            t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        }
-
+        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         return t;
     }
 
-    private GradientDrawable roundBg(int color) {
+    private GradientDrawable bgShape(int color, int accent) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
-        d.setCornerRadius(dp(14));
+        d.setCornerRadius(dp(12));
+        d.setStroke(dp(1), accent);
         return d;
     }
 
-    private void toast(String message) {
-        Toast.makeText(
-            this, message, Toast.LENGTH_SHORT
-        ).show();
+    private void tintSeek(SeekBar b, int accent) {
+        if (Build.VERSION.SDK_INT >= 21) {
+            b.setProgressTintList(android.content.res.ColorStateList.valueOf(accent));
+            b.setThumbTintList(android.content.res.ColorStateList.valueOf(accent));
+        }
     }
 
-    private int dp(int value) {
-        return (int) (
-            value * getResources().getDisplayMetrics().density + 0.5f
-        );
+    private void space(LinearLayout parent, int height) {
+        View v = new View(this);
+        parent.addView(v, new LinearLayout.LayoutParams(1, dp(height)));
     }
 
-@Override
-    protected void onDestroy() {
-    audioRunning = false;
-    super.onDestroy();
+    private int dp(int n) {
+        return (int)(n * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    @Override protected void onDestroy() {
+        audioRunning = false;
+        super.onDestroy();
+    }
 }
-
-    private void addAmpToneControl(LinearLayout parent, float initialValue) {
-    SeekBar bar = new SeekBar(this);
-    bar.setMax(100);
-    bar.setProgress(Math.max(0, Math.min(100, (int) initialValue)));
-    parent.addView(bar);
-
-    bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-        @Override
-        public void onProgressChanged(
-                SeekBar seekBar, int progress, boolean fromUser) {
-            // Akan dihubungkan ke mesin audio pada tahap berikutnya.
-        }
-
-        @Override
-        public void onStartTrackingTouch(SeekBar seekBar) {
-        }
-
-        @Override
-        public void onStopTrackingTouch(SeekBar seekBar) {
-        }
-    });
-}
-}
-
