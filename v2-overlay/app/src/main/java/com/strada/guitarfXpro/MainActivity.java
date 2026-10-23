@@ -547,17 +547,25 @@ public class MainActivity extends Activity {
     }
 
     private void button(LinearLayout parent, String label, int accent, float weight, Runnable action) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setTextColor(TEXT);
-        b.setTextSize(11);
-        b.setAllCaps(false);
-        b.setBackground(bgShape(Color.rgb(25, 34, 53), accent));
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(46), weight);
-        p.setMargins(dp(3), dp(4), dp(3), dp(4));
-        parent.addView(b, p);
-        b.setOnClickListener(v -> action.run());
+    Button b = new Button(this);
+    b.setText(label);
+    b.setTextColor(TEXT);
+    b.setTextSize(11);
+    b.setAllCaps(false);
+    b.setBackground(bgShape(Color.rgb(25, 34, 53), accent));
+
+    LinearLayout.LayoutParams p;
+
+    if (parent.getOrientation() == LinearLayout.HORIZONTAL) {
+        p = new LinearLayout.LayoutParams(0, dp(46), weight);
+    } else {
+        p = new LinearLayout.LayoutParams(-1, dp(46));
     }
+
+    p.setMargins(dp(3), dp(4), dp(3), dp(4));
+    parent.addView(b, p);
+    b.setOnClickListener(v -> action.run());
+}
 
     private TextView text(String value, int size, int color, boolean bold) {
         TextView t = new TextView(this);
