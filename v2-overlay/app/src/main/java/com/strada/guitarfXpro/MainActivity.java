@@ -482,9 +482,12 @@ public class MainActivity extends Activity {
                 track.release();
             }
             audioRunning = false;
-            runOnUiThread(() -> audioStatus.setText("Status: audio stopped"));
-        }
+runOnUiThread(() -> {
+    if (audioStatus != null &&
+            !audioStatus.getText().toString().startsWith("Audio error:")) {
+        audioStatus.setText("Status: audio stopped");
     }
+}
 
     private void estimatePitch(short[] samples, int count, int rate) {
         if (count < 128) return;
