@@ -1,87 +1,54 @@
-
-name: Build Strada Guitar FX Pro APK
+name: Strada Desktop Build
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - desktop-audio
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/desktop-build.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Build on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-
-
-      - name: Extract new source ZIP
+      - name: Compile desktop application
+        shell: bash
         run: |
-          test -f Strada-Guitar-FX-Pro-Source.zip
-          mkdir -p source
-          unzip -q Strada-Guitar-FX-Pro-Source.zip -d source
-          test -f source/Strada-Guitar-FX-Pro/app/build.gradle
+          mkdir -p build/classes
+          find desktop/src/main/java -name "*.java" > sources.txt
+          javac -encoding UTF-8 -d build/classes @sources.txt
 
-            
-      - name: Apply V4 app overlays
+      - name: Package runnable JAR
+        shell: bash
         run: |
-          cp v2-overlay/app/src/main/java/com/strada/guitarfXpro/MainActivity.java source/Strada-Guitar-FX-Pro/app/src/main/java/com/strada/guitarfXpro/MainActivity.java
-          cp v2-overlay/app/src/main/java/com/strada/guitarfXpro/AndroidManifest.xml source/Strada-Guitar-FX-Pro/app/src/main/AndroidManifest.xml
+          jar --create --file build/StradaDesktop.jar \
+            --main-class com.strada.desktop.StradaDesktop \
+            -C build/classes .
 
-
-
-      - name: Inspect app source for V2 integration
-        working-directory: source/Strada-Guitar-FX-Pro
-        run: |
-          echo '--- JAVA SOURCE FILES ---'
-          find app/src/main -type f | sort
-          echo '--- MAIN ACTIVITY ---'
-          MAIN=$(find app/src/main -name MainActivity.java | head -n 1)
-          if [ -n "$MAIN" ]; then sed -n '1,280p' "$MAIN"; else echo 'MainActivity.java not found'; fi
-          echo '--- MANIFEST ---'
-          sed -n '1,220p' app/src/main/AndroidManifest.xml
-          echo '--- CHECK BLUETOOTH PERMISSION ---'
-          grep -n 'BLUETOOTH' app/src/main/AndroidManifest.xml || true
-
-      - name: Build debug APK
-        working-directory: source/Strada-Guitar-FX-Pro
-        run: gradle --no-daemon assembleDebug --stacktrace --info
-
-        
-      - name: Validate Android Manifest
-        working-directory: source/Strada-Guitar-FX-Pro
-        run: |
-          echo "--- MANIFEST PATH ---"
-          pwd
-          echo "--- MANIFEST CONTENT ---"
-          cat app/src/main/AndroidManifest.xml
-          echo "--- XML VALIDATION ---"
-          python3 -c "import xml.etree.ElementTree as ET; ET.parse('app/src/main/AndroidManifest.xml'); print('XML VALID')"
-
-      - name: Upload APK
+      - name: Upload desktop artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Strada-Guitar-FX-Pro-APK
-          path: source/Strada-Guitar-FX-Pro/app/build/outputs/apk/debug/app-debug.apk
+          name: Strada-Desktop-${{ matrix.os }}
+          path: build/StradaDesktop.jar
           if-no-files-found: error
-          retention-days: 14
