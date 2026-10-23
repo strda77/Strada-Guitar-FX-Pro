@@ -472,22 +472,30 @@ public class MainActivity extends Activity {
                 audioStatus.setText("Audio error: " + e.getMessage());
                 Toast.makeText(this, "Audio error: " + e.getMessage(), Toast.LENGTH_LONG).show();
             });
-        } finally {
+                } finally {
             if (recorder != null) {
                 try { recorder.stop(); } catch (Exception ignored) {}
                 recorder.release();
             }
+
             if (track != null) {
-                try { track.pause(); track.flush(); } catch (Exception ignored) {}
+                try {
+                    track.pause();
+                    track.flush();
+                } catch (Exception ignored) {}
                 track.release();
             }
+
             audioRunning = false;
+
             runOnUiThread(() -> {
-    if (audioStatus != null &&
-            !audioStatus.getText().toString().startsWith("Audio error:")) {
-        audioStatus.setText("Status: audio stopped");
+                if (audioStatus != null &&
+                        !audioStatus.getText().toString().startsWith("Audio error:")) {
+                    audioStatus.setText("Status: audio stopped");
+                }
+            });
+        }
     }
-}
 
     private void estimatePitch(short[] samples, int count, int rate) {
         if (count < 128) return;
