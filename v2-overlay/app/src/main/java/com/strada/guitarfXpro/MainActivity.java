@@ -482,7 +482,7 @@ public class MainActivity extends Activity {
                 track.release();
             }
             audioRunning = false;
-runOnUiThread(() -> {
+            runOnUiThread(() -> {
     if (audioStatus != null &&
             !audioStatus.getText().toString().startsWith("Audio error:")) {
         audioStatus.setText("Status: audio stopped");
