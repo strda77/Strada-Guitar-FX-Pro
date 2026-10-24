@@ -306,40 +306,61 @@ public class MainActivity extends Activity {
 
     pageContainer.removeAllViews();
 
-    TextView heading = text("STRADA  /  " + page, 22, CYAN, true);
+    // Gunakan pageContainer sebagai tempat konten halaman.
+    root = pageContainer;
+
+    TextView heading = text("STRADA / " + page, 22, CYAN, true);
     heading.setPadding(dp(12), dp(16), dp(12), dp(10));
     pageContainer.addView(heading);
 
-    TextView info = text("", 13, MUTED, false);
-    info.setPadding(dp(12), dp(6), dp(12), dp(12));
-
     switch (page) {
-        case "HOME":
-            info.setText("GUITAR FX PRO\nPilih fitur untuk mulai bermain.");
+        case "HOME": {
+            TextView info = text(
+                "GUITAR FX PRO\nPilih fitur melalui navigasi di bawah.",
+                14, MUTED, false
+            );
+            info.setPadding(dp(12), dp(8), dp(12), dp(16));
+            pageContainer.addView(info);
+
+            Button pedalButton = new Button(this);
+            pedalButton.setText("BUKA PEDALBOARD");
+            pedalButton.setOnClickListener(v -> {
+                showPage("PEDALBOARD");
+                setupNavigation();
+            });
+            pageContainer.addView(pedalButton);
             break;
+        }
+
         case "PEDALBOARD":
-            info.setText("PEDALBOARD\nEfek gitar dan kontrol pedal.");
+            buildPedalboardPage();
             break;
+
         case "AMP & CAB":
-            info.setText("AMP & CABINET\nModel amplifier dan kabinet.");
+            section("AMPLIFIER", "Pilih model amp dan atur karakter suara.");
             break;
+
         case "TUNER":
-            info.setText("TUNER\nGunakan input audio untuk mendeteksi nada.");
+            section("GUITAR TUNER", "Gunakan input audio untuk mendeteksi nada.");
             break;
+
         case "LOOPER":
-            info.setText("LOOPER\nKontrol perekaman dan playback.");
+            section("LOOPER", "Kontrol looper yang sudah tersedia di aplikasi.");
             break;
+
         case "PRESETS":
-            info.setText("PRESET LIBRARY\nPilih dan atur suara favorit.");
+            section("PRESET LIBRARY", "Pilih preset melalui kontrol preset yang tersedia.");
             break;
+
         case "AUDIO":
-            info.setText("AUDIO & SETTINGS\nPengaturan input, output, dan volume.");
+            section("AUDIO SETTINGS", "Pengaturan input, output, dan volume.");
+            break;
+
+        default:
+            section("STRADA", "Halaman tidak ditemukan.");
             break;
     }
-
-    pageContainer.addView(info);
 }
-
     private void addEffectCard(final int id) {
         final int accent = effectColors[id];
         LinearLayout c = card(accent);
