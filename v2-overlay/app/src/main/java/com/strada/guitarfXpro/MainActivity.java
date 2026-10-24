@@ -312,7 +312,7 @@ public class MainActivity extends Activity {
     TextView heading = text("STRADA / " + page, 22, CYAN, true);
     heading.setPadding(dp(12), dp(16), dp(12), dp(10));
     pageContainer.addView(heading);
-
+    }
     switch (page) {
         case "HOME": {
             TextView info = text(
