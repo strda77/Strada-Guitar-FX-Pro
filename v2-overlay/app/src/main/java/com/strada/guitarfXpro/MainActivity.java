@@ -118,16 +118,37 @@ public class MainActivity extends Activity {
         applyPresetValues(0);
         buildUi();
     }
-
+    
     private void buildUi() {
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.setBackgroundColor(BG);
-        root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(14), dp(12), dp(14), dp(24));
-        scroll.addView(root);
-        setContentView(scroll);
+    LinearLayout screen = new LinearLayout(this);
+    screen.setOrientation(LinearLayout.VERTICAL);
+    screen.setBackgroundColor(BG);
+
+    pageContainer = new LinearLayout(this);
+    pageContainer.setOrientation(LinearLayout.VERTICAL);
+
+    ScrollView scroll = new ScrollView(this);
+    scroll.setFillViewport(true);
+    scroll.setBackgroundColor(BG);
+    scroll.addView(pageContainer);
+
+    screen.addView(scroll, new LinearLayout.LayoutParams(
+        -1, 0, 1
+    ));
+
+    bottomNavigation = new LinearLayout(this);
+    bottomNavigation.setOrientation(LinearLayout.HORIZONTAL);
+    bottomNavigation.setGravity(Gravity.CENTER);
+    bottomNavigation.setPadding(dp(4), dp(6), dp(4), dp(6));
+    bottomNavigation.setBackgroundColor(Color.rgb(24, 27, 36));
+
+    screen.addView(bottomNavigation, new LinearLayout.LayoutParams(
+        -1, dp(64)
+    ));
+
+    setContentView(screen);
+
+    root = pageContainer;
 
         TextView brand = text("STRADA", 30, CYAN, true);
         brand.setLetterSpacing(0.13f);
@@ -277,6 +298,47 @@ public class MainActivity extends Activity {
         footer.setGravity(Gravity.CENTER);
         root.addView(footer);
     }
+
+    private void showPage(String page) {
+    currentPage = page;
+
+    if (pageContainer == null) return;
+
+    pageContainer.removeAllViews();
+
+    TextView heading = text("STRADA  /  " + page, 22, CYAN, true);
+    heading.setPadding(dp(12), dp(16), dp(12), dp(10));
+    pageContainer.addView(heading);
+
+    TextView info = text("", 13, MUTED, false);
+    info.setPadding(dp(12), dp(6), dp(12), dp(12));
+
+    switch (page) {
+        case "HOME":
+            info.setText("GUITAR FX PRO\nPilih fitur untuk mulai bermain.");
+            break;
+        case "PEDALBOARD":
+            info.setText("PEDALBOARD\nEfek gitar dan kontrol pedal.");
+            break;
+        case "AMP & CAB":
+            info.setText("AMP & CABINET\nModel amplifier dan kabinet.");
+            break;
+        case "TUNER":
+            info.setText("TUNER\nGunakan input audio untuk mendeteksi nada.");
+            break;
+        case "LOOPER":
+            info.setText("LOOPER\nKontrol perekaman dan playback.");
+            break;
+        case "PRESETS":
+            info.setText("PRESET LIBRARY\nPilih dan atur suara favorit.");
+            break;
+        case "AUDIO":
+            info.setText("AUDIO & SETTINGS\nPengaturan input, output, dan volume.");
+            break;
+    }
+
+    pageContainer.addView(info);
+}
 
     private void addEffectCard(final int id) {
         final int accent = effectColors[id];
