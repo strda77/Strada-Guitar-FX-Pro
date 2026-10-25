@@ -25,6 +25,10 @@ import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.graphics.Typeface;
 
 import java.util.Locale;
 
@@ -486,7 +490,214 @@ public class MainActivity extends Activity {
     return null;
         }
         
-    private void addEffectCard(final int id) {
+    private void addEffectCard(int id) {
+    if (id < 0 || id >= effectNames.length) return;
+
+    // Panel pedal hardware
+    PedalFaceView pedal = new PedalFaceView(this, id);
+
+    LinearLayout.LayoutParams pedalParams =
+            new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(205));
+
+    pedalParams.setMargins(dp(8), dp(8), dp(8), dp(4));
+    root.addView(pedal, pedalParams);
+
+    // Pertahankan kontrol parameter asli.
+    // Metode ini adalah metode lama yang hanya diganti namanya.
+    addEffectControls(id);
+}
+
+private class PedalFaceView extends View {
+    private final int effectId;
+    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF body = new RectF();
+    private final int accent;
+    private final float density;
+
+    PedalFaceView(Context context, int id) {
+        super(context);
+        effectId = id;
+        accent = effectColors[id];
+        density = getResources().getDisplayMetrics().density;
+
+        setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+        setClickable(true);
+
+        setOnClickListener(v -> {
+            effectOn[effectId] = !effectOn[effectId];
+            invalidate();
+        });
+
+        setContentDescription(
+                effectNames[id] + ", ketuk untuk mengubah ON/OFF");
+    }
+
+    private float d(float value) {
+        return value * density;
+    }
+
+    private void paint(int color, float size, boolean bold) {
+        p.setColor(color);
+        p.setTextSize(d(size));
+        p.setTypeface(bold
+                ? Typeface.create("sans-serif", Typeface.BOLD)
+                : Typeface.create("sans-serif", Typeface.NORMAL));
+        p.setStyle(Paint.Style.FILL);
+        p.setShader(null);
+        p.setStrokeWidth(d(1));
+    }
+
+    private void centered(Canvas c, String text,
+                          float x, float y, int color,
+                          float size, boolean bold) {
+        paint(color, size, bold);
+        p.setTextAlign(Paint.Align.CENTER);
+        c.drawText(text, x, y, p);
+        p.setTextAlign(Paint.Align.LEFT);
+    }
+
+    private void knob(Canvas c, float x, float y,
+                      float radius, String label, float position) {
+        // Bayangan kenop
+        paint(0x88000000, 1, false);
+        c.drawCircle(x + d(1), y + d(2), radius + d(1), p);
+
+        // Cincin luar
+        paint(0xFF080D16, 1, false);
+        c.drawCircle(x, y, radius + d(3), p);
+
+        paint(effectOn[effectId] ? accent : 0xFF526174, 1, false);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(d(2));
+        c.drawCircle(x, y, radius + d(1), p);
+        p.setStyle(Paint.Style.FILL);
+
+        // Badan kenop
+        paint(0xFF263247, 1, false);
+        c.drawCircle(x, y, radius, p);
+
+        paint(0xFF64758C, 1, false);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(d(1));
+        c.drawCircle(x, y, radius * 0.72f, p);
+        p.setStyle(Paint.Style.FILL);
+
+        // Garis penunjuk posisi
+        float angle = (float) Math.toRadians(
+                135 + 270 * Math.max(0f, Math.min(1f, position)));
+
+        float x1 = x + (float) Math.cos(angle) * radius * 0.2f;
+        float y1 = y + (float) Math.sin(angle) * radius * 0.2f;
+        float x2 = x + (float) Math.cos(angle) * radius * 0.76f;
+        float y2 = y + (float) Math.sin(angle) * radius * 0.76f;
+
+        paint(0xFFFFFFFF, 1, false);
+        p.setStrokeWidth(d(2));
+        c.drawLine(x1, y1, x2, y2, p);
+
+        centered(c, label, x, y + radius + d(19),
+                0xFFDCE7F5, 10, true);
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+
+        float w = getWidth();
+        float h = getHeight();
+        float pad = d(8);
+
+        // Dasar pedal
+        body.set(pad, d(5), w - pad, h - d(5));
+
+        paint(0xFF050811, 1, false);
+        canvas.drawRoundRect(body, d(18), d(18), p);
+
+        // Badan berwarna
+        RectF face = new RectF(
+                pad + d(4), d(9),
+                w - pad - d(4), h - d(9));
+
+        paint(effectOn[effectId] ? accent : 0xFF354052, 1, false);
+        canvas.drawRoundRect(face, d(15), d(15), p);
+
+        // Panel tengah
+        RectF inner = new RectF(
+                face.left + d(5), face.top + d(5),
+                face.right - d(5), face.bottom - d(5));
+
+        paint(0xFF111A2A, 1, false);
+        canvas.drawRoundRect(inner, d(12), d(12), p);
+
+        // Garis aksen
+        paint(accent, 1, false);
+        canvas.drawRoundRect(
+                new RectF(inner.left, inner.top,
+                          inner.left + d(5), inner.bottom),
+                d(3), d(3), p);
+
+        centered(canvas, "STRADA  /  EFFECTS",
+                w / 2f, d(31), 0xFF9DB0C9, 9, true);
+
+        String name = effectNames[effectId];
+        float titleSize = name.length() > 12 ? 15 : 18;
+
+        centered(canvas, name,
+                w / 2f, d(55),
+                effectOn[effectId] ? accent : 0xFFDCE5F2,
+                titleSize, true);
+
+        // Lampu status
+        float ledX = w - d(35);
+        float ledY = d(31);
+
+        paint(effectOn[effectId] ? accent : 0xFF455063, 1, false);
+        canvas.drawCircle(ledX, ledY, d(7), p);
+
+        paint(0xFF080D16, 1, false);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(d(1));
+        canvas.drawCircle(ledX, ledY, d(9), p);
+        p.setStyle(Paint.Style.FILL);
+
+        // Tiga kenop dekoratif.
+        // Tidak mengubah params; kontrol asli tetap berada di bawah pedal.
+        float cy = h * 0.49f;
+        float gap = w / 4f;
+        float radius = Math.min(d(19), w / 14f);
+
+        knob(canvas, gap, cy, radius, "DRIVE", 0.60f);
+        knob(canvas, gap * 2, cy, radius, "TONE", 0.48f);
+        knob(canvas, gap * 3, cy, radius, "LEVEL", 0.72f);
+
+        // Sakelar kaki
+        float sx = w / 2f;
+        float sy = h - d(34);
+
+        paint(0xFF070B12, 1, false);
+        canvas.drawCircle(sx, sy, d(15), p);
+
+        paint(effectOn[effectId] ? accent : 0xFF68768B, 1, false);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(d(2));
+        canvas.drawCircle(sx, sy, d(11), p);
+        p.setStyle(Paint.Style.FILL);
+
+        paint(effectOn[effectId] ? accent : 0xFF526174, 1, false);
+        canvas.drawCircle(sx, sy, d(5), p);
+
+        centered(canvas,
+                effectOn[effectId] ? "● ACTIVE — TAP TO BYPASS"
+                                   : "○ BYPASSED — TAP TO ACTIVATE",
+                sx, h - d(10),
+                effectOn[effectId] ? 0xFFFFFFFF : 0xFF9AA8BB,
+                9, true);
+    }
+}
+
+    private void addEffectControls(int id) {
         final int accent = effectColors[id];
         LinearLayout c = card(accent);
         root.addView(c);
