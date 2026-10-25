@@ -449,7 +449,8 @@ public class MainActivity extends Activity {
     for (int i = 0; i < effectNames.length; i++) {  
     addEffectCard(i);  
 }
-    
+    }
+        
     private void setupNavigation() {
     if (bottomNavigation == null) return;
 
