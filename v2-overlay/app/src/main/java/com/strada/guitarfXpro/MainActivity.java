@@ -107,7 +107,8 @@ public class MainActivity extends Activity {
     private LinearLayout bottomNavigation;
     private String currentPage = "HOME";
 
-    @Override public void onCreate(Bundle state) {
+    @Override 
+    public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
@@ -299,7 +300,8 @@ public class MainActivity extends Activity {
         root.addView(footer);
     }
 
-    private void showPage(String page) {
+    
+private void showPage(String page) {
     currentPage = page;
 
     if (pageContainer == null) return;
@@ -312,7 +314,7 @@ public class MainActivity extends Activity {
     TextView heading = text("STRADA / " + page, 22, CYAN, true);
     heading.setPadding(dp(12), dp(16), dp(12), dp(10));
     pageContainer.addView(heading);
-    }
+
     switch (page) {
         case "HOME": {
             TextView info = text(
@@ -331,7 +333,7 @@ public class MainActivity extends Activity {
             pageContainer.addView(pedalButton);
             break;
         }
-
+    
         case "PEDALBOARD":
             buildPedalboardPage();
             break;
@@ -361,6 +363,7 @@ public class MainActivity extends Activity {
             break;
     }
 }
+
     private void addEffectCard(final int id) {
         final int accent = effectColors[id];
         LinearLayout c = card(accent);
