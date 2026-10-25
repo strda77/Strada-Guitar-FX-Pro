@@ -300,8 +300,7 @@ public class MainActivity extends Activity {
         root.addView(footer);
     }
 
-    
-private void showPage(String page) {
+    private void showPage(String page) {
     currentPage = page;
 
     if (pageContainer == null) return;
