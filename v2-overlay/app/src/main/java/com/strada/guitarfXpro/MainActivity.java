@@ -105,6 +105,7 @@ public class MainActivity extends Activity {
 
     private LinearLayout pageContainer;
     private LinearLayout bottomNavigation;
+    private ScrollView mainScroll;
     private String currentPage = "HOME";
 
     @Override 
@@ -298,6 +299,9 @@ public class MainActivity extends Activity {
         TextView footer = text("STRADA • PLAY • CREATE • BEYOND", 12, CYAN, true);
         footer.setGravity(Gravity.CENTER);
         root.addView(footer);
+
+        mainScroll = scroll;
+        setupNavigation();
     }
 
     private void showPage(String page) {
@@ -363,6 +367,125 @@ public class MainActivity extends Activity {
     }
 }
 
+    private void buildPedalboardPage() {
+    section("FULL COLOR PEDALBOARD",
+            "Tap each pedal to switch it ON/OFF");
+
+    for (int i = 0; i < effectNames.length; i++) {
+        addEffectCard(i);
+    }
+}
+
+    private void setupNavigation() {
+    if (bottomNavigation == null) return;
+
+    bottomNavigation.removeAllViews();
+
+    String[] pages = {
+        "HOME", "PEDALBOARD", "AMP & CAB",
+        "TUNER", "LOOPER", "PRESETS", "AUDIO"
+    };
+
+    String[] labels = {
+        "Home", "Pedal", "Amp/Cab",
+        "Tuner", "Looper", "Preset", "Audio"
+    };
+
+    for (int i = 0; i < pages.length; i++) {
+        final String page = pages[i];
+
+        Button button = new Button(this);
+        button.setText(labels[i]);
+        button.setTextSize(9);
+        button.setAllCaps(false);
+        button.setTextColor(
+            page.equals(currentPage) ? CYAN : TEXT
+        );
+        button.setBackgroundColor(Color.TRANSPARENT);
+        button.setPadding(dp(1), 0, dp(1), 0);
+
+        bottomNavigation.addView(
+            button,
+            new LinearLayout.LayoutParams(0, -1, 1)
+        );
+
+        button.setOnClickListener(v -> {
+        currentPage = page;
+        scrollToPage(page);
+        setupNavigation();
+        });
+    }
+}
+    private void scrollToPage(String page) {
+    if (mainScroll == null || root == null) return;
+
+    String target;
+
+    switch (page) {
+        case "PEDALBOARD":
+            target = "FULL COLOR PEDALBOARD";
+            break;
+        case "AMP & CAB":
+            target = "AMP SELECTOR";
+            break;
+        case "TUNER":
+            target = "TUNER";
+            break;
+        case "LOOPER":
+            target = "LOOPER";
+            break;
+        case "PRESETS":
+            target = "PRESET LIBRARY";
+            break;
+        case "AUDIO":
+            target = "AUDIO INPUT / OUTPUT";
+            break;
+        default:
+            mainScroll.smoothScrollTo(0, 0);
+            return;
+    }
+
+    View found = findTextTarget(root, target);
+
+    if (found != null) {
+        int[] location = new int[2];
+        found.getLocationInWindow(location);
+        int[] scrollLocation = new int[2];
+        mainScroll.getLocationInWindow(scrollLocation);
+
+        int y = mainScroll.getScrollY()
+                + location[1] - scrollLocation[1];
+
+        mainScroll.smoothScrollTo(0, Math.max(0, y));
+    }
+}
+
+    private View findTextTarget(
+        android.view.ViewGroup parent, String target) {
+
+    for (int i = 0; i < parent.getChildCount(); i++) {
+        View child = parent.getChildAt(i);
+
+        if (child instanceof TextView) {
+            String value = ((TextView) child)
+                    .getText().toString();
+
+            if (value.contains(target)) {
+                return child;
+            }
+        }
+
+        if (child instanceof android.view.ViewGroup) {
+            View found = findTextTarget(
+                    (android.view.ViewGroup) child, target);
+
+            if (found != null) return found;
+        }
+    }
+
+    return null;
+        }
+        
     private void addEffectCard(final int id) {
         final int accent = effectColors[id];
         LinearLayout c = card(accent);
