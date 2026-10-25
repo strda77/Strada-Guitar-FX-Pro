@@ -159,7 +159,6 @@ public class MainActivity extends Activity {
         showPage("HOME");
         setupNavigation();
     }
-    }
     
     private void showPage(String page) {
     currentPage = page;
