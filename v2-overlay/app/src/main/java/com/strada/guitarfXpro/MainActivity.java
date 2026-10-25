@@ -152,9 +152,9 @@ public class MainActivity extends Activity {
         -1, dp(64)
     ));
 
-    setContentView(screen);
-
     root = pageContainer;
+    showPage("HOME");
+    setupNavigation();
 
         TextView brand = text("STRADA", 30, CYAN, true);
         brand.setLetterSpacing(0.13f);
@@ -307,79 +307,149 @@ public class MainActivity extends Activity {
         mainScroll = scroll;
         setupNavigation();
     }
-
+    
     private void showPage(String page) {
     currentPage = page;
 
     if (pageContainer == null) return;
 
     pageContainer.removeAllViews();
-
-    // Gunakan pageContainer sebagai tempat konten halaman.
     root = pageContainer;
-
-    TextView heading = text("STRADA / " + page, 22, CYAN, true);
-    heading.setPadding(dp(12), dp(16), dp(12), dp(10));
-    pageContainer.addView(heading);
 
     switch (page) {
         case "HOME": {
-            TextView info = text(
-                "GUITAR FX PRO\nPilih fitur melalui navigasi di bawah.",
-                14, MUTED, false
+            TextView logo = text("STRADA", 34, CYAN, true);
+            logo.setLetterSpacing(0.12f);
+            logo.setPadding(dp(12), dp(20), dp(12), 0);
+            pageContainer.addView(logo);
+
+            TextView subtitle = text(
+                "GUITAR FX PRO  •  MULTI EFFECTS",
+                13, PURPLE, true
             );
-            info.setPadding(dp(12), dp(8), dp(12), dp(16));
-            pageContainer.addView(info);
+            subtitle.setPadding(
+                dp(14), dp(2), dp(12), dp(18)
+            );
+            pageContainer.addView(subtitle);
+
+            section(
+                "MAIN CONTROL",
+                "Pusat kontrol suara dan preset Strada."
+            );
+
+            Button presetButton = new Button(this);
+            presetButton.setText("PRESET LIBRARY  •  50 TONES");
+            presetButton.setAllCaps(false);
+            presetButton.setOnClickListener(v -> {
+                showPage("PRESETS");
+                setupNavigation();
+            });
+            pageContainer.addView(presetButton);
 
             Button pedalButton = new Button(this);
-            pedalButton.setText("BUKA PEDALBOARD");
+            pedalButton.setText("OPEN PEDALBOARD  →");
+            pedalButton.setAllCaps(false);
             pedalButton.setOnClickListener(v -> {
                 showPage("PEDALBOARD");
                 setupNavigation();
             });
             pageContainer.addView(pedalButton);
+
+            Button ampButton = new Button(this);
+            ampButton.setText("AMPLIFIER & CABINET  →");
+            ampButton.setAllCaps(false);
+            ampButton.setOnClickListener(v -> {
+                showPage("AMP & CAB");
+                setupNavigation();
+            });
+            pageContainer.addView(ampButton);
+
+            Button tunerButton = new Button(this);
+            tunerButton.setText("GUITAR TUNER  →");
+            tunerButton.setAllCaps(false);
+            tunerButton.setOnClickListener(v -> {
+                showPage("TUNER");
+                setupNavigation();
+            });
+            pageContainer.addView(tunerButton);
+
+            Button looperButton = new Button(this);
+            looperButton.setText("LOOPER  →");
+            looperButton.setAllCaps(false);
+            looperButton.setOnClickListener(v -> {
+                showPage("LOOPER");
+                setupNavigation();
+            });
+            pageContainer.addView(looperButton);
+
+            Button audioButton = new Button(this);
+            audioButton.setText("AUDIO & SETTINGS  →");
+            audioButton.setAllCaps(false);
+            audioButton.setOnClickListener(v -> {
+                showPage("AUDIO");
+                setupNavigation();
+            });
+            pageContainer.addView(audioButton);
             break;
         }
-    
+
         case "PEDALBOARD":
             buildPedalboardPage();
             break;
 
         case "AMP & CAB":
-            section("AMPLIFIER", "Pilih model amp dan atur karakter suara.");
+            section(
+                "AMPLIFIER & CABINET",
+                "Pilih amplifier, cabinet, gain, dan karakter tone."
+            );
             break;
 
         case "TUNER":
-            section("GUITAR TUNER", "Gunakan input audio untuk mendeteksi nada.");
+            section(
+                "GUITAR TUNER",
+                "Gunakan input audio untuk mendeteksi nada."
+            );
             break;
 
         case "LOOPER":
-            section("LOOPER", "Kontrol looper yang sudah tersedia di aplikasi.");
+            section(
+                "LOOPER",
+                "Kontrol perekaman dan pemutaran loop."
+            );
             break;
 
         case "PRESETS":
-            section("PRESET LIBRARY", "Pilih preset melalui kontrol preset yang tersedia.");
+            section(
+                "PRESET LIBRARY",
+                "Pilih dan atur preset suara gitar."
+            );
             break;
 
         case "AUDIO":
-            section("AUDIO SETTINGS", "Pengaturan input, output, dan volume.");
+            section(
+                "AUDIO & SETTINGS",
+                "Pengaturan input, output, dan audio."
+            );
             break;
 
         default:
             section("STRADA", "Halaman tidak ditemukan.");
             break;
     }
-}
 
-    private void buildPedalboardPage() {
-    section("FULL COLOR PEDALBOARD",
-            "Tap each pedal to switch it ON/OFF");
-
-    for (int i = 0; i < effectNames.length; i++) {
-        addEffectCard(i);
+    if (mainScroll != null) {
+        mainScroll.post(() -> mainScroll.scrollTo(0, 0));
     }
 }
 
+    private void buildPedalboardPage() {  
+    section("FULL COLOR PEDALBOARD",  
+        "Tap each pedal to switch it ON/OFF");  
+
+    for (int i = 0; i < effectNames.length; i++) {  
+    addEffectCard(i);  
+}
+    
     private void setupNavigation() {
     if (bottomNavigation == null) return;
 
@@ -398,15 +468,18 @@ public class MainActivity extends Activity {
     for (int i = 0; i < pages.length; i++) {
         final String page = pages[i];
 
-        Button button = new Button(this);
-        button.setText(labels[i]);
-        button.setTextSize(9);
-        button.setAllCaps(false);
-        button.setTextColor(
-            page.equals(currentPage) ? CYAN : TEXT
+        TextView button = text(
+            labels[i],
+            10,
+            page.equals(currentPage) ? CYAN : TEXT,
+            page.equals(currentPage)
         );
+
+        button.setGravity(android.view.Gravity.CENTER);
+        button.setClickable(true);
+        button.setFocusable(true);
+        button.setPadding(dp(2), dp(8), dp(2), dp(8));
         button.setBackgroundColor(Color.TRANSPARENT);
-        button.setPadding(dp(1), 0, dp(1), 0);
 
         bottomNavigation.addView(
             button,
@@ -414,12 +487,12 @@ public class MainActivity extends Activity {
         );
 
         button.setOnClickListener(v -> {
-        currentPage = page;
-        scrollToPage(page);
-        setupNavigation();
+            showPage(page);
+            setupNavigation();
         });
     }
 }
+
     private void scrollToPage(String page) {
     if (mainScroll == null || root == null) return;
 
