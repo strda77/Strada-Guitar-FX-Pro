@@ -47,7 +47,7 @@ jobs:
         run: |
           cp v2-overlay/app/src/main/java/com/strada/guitarfXpro/MainActivity.java source/Strada-Guitar-FX-Pro/app/src/main/java/com/strada/guitarfXpro/MainActivity.java
           cp v2-overlay/app/src/main/java/com/strada/guitarfXpro/AndroidManifest.xml source/Strada-Guitar-FX-Pro/app/src/main/AndroidManifest.xml
-
+          cp v2-overlay/app/src/main/java/com/strada/guitarfXpro/UsbAudioDetector.java source/Strada-Guitar-FX-Pro/app/src/main/java/com/strada/guitarfXpro/UsbAudioDetector.java
 
 
       - name: Inspect app source for V2 integration
