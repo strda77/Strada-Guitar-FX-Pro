@@ -1062,6 +1062,48 @@ public class MainActivity extends Activity {
         editor.apply();
     }
     
+    private boolean loadPresetProfile(int index) {
+    if (presetPreferences == null) return false;
+
+    String key = "preset_" + index + "_";
+
+    if (!presetPreferences.contains(key + "amp")) {
+        return false;
+    }
+
+    selectedAmp = presetPreferences.getInt(key + "amp", 0);
+    selectedCab = presetPreferences.getInt(key + "cab", 5);
+
+    ampOn = presetPreferences.getBoolean(key + "ampOn", true);
+    cabOn = presetPreferences.getBoolean(key + "cabOn", true);
+
+    ampGain = presetPreferences.getFloat(key + "gain", 3.0f);
+    ampBass = presetPreferences.getFloat(key + "bass", 0.5f);
+    ampMiddle = presetPreferences.getFloat(key + "middle", 0.5f);
+    ampTreble = presetPreferences.getFloat(key + "treble", 0.6f);
+    ampVolume = presetPreferences.getFloat(key + "ampVolume", 0.7f);
+    masterVolume = presetPreferences.getFloat(key + "masterVolume", 0.72f);
+
+    for (int i = 0; i < EFFECT_COUNT; i++) {
+        setEffectOn(i, presetPreferences.getBoolean(key + "effect_" + i, false));
+
+        for (int j = 0; j < paramNames[i].length; j++) {
+            int value = presetPreferences.getInt(
+                    key + "param_" + i + "_" + j, 50);
+            setParam(i, j, value);
+        }
+    }
+
+    if (masterSeek != null) {
+        masterSeek.setProgress(Math.round(masterVolume * 100));
+    }
+
+    updateMasterValue(Math.round(masterVolume * 100));
+    refreshEffectControlUi();
+
+    return true;
+    }
+    
     private void updatePresetLabels() {
         if (presetTitle != null) {
             if (currentPage.equals("HOME")) presetTitle.setText("PRESET  •  " + presetNames[selectedPreset]);
