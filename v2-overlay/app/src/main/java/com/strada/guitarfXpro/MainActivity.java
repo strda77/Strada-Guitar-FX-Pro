@@ -531,7 +531,7 @@ public class MainActivity extends Activity {
         load.setOnClickListener(v -> {
             applyPresetValues(presetSpinner.getSelectedItemPosition());
             updatePresetLabels();
-            Toast.makeText(this, "Preset diterapkan: " + presetNames[selectedPreset], Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Preset diterapkan: " + getpresetNames[selectedPreset], Toast.LENGTH_SHORT).show();
         });
         TextView info = text("Preset dapat kamu ubah lagi dari halaman Pedalboard dan Amp/Cab. Perubahan belum disimpan sebagai preset pengguna setelah aplikasi ditutup.", 10, MUTED, false);
         info.setPadding(0, dp(12), 0, dp(4));
@@ -1005,7 +1005,7 @@ public class MainActivity extends Activity {
     }
 
     private void applyPresetValues(int index) {
-        selectedPreset = clamp(index, 0, presetNames.length - 1);
+        selectedPreset = clamp(index, 0, getAllPresetNames().length - 1);
         for (int i = 0; i < EFFECT_COUNT; i++) {
             boolean on;
             if (selectedPreset < 6) on = (i == 0 || i == 1 || i == 5) && ((selectedPreset + i) % 3 != 0);
@@ -1139,12 +1139,20 @@ private String getPresetName(int index) {
     }
     
     private void updatePresetLabels() {
-        if (presetTitle != null) {
-            if (currentPage.equals("HOME")) presetTitle.setText("PRESET  •  " + presetNames[selectedPreset]);
-            else presetTitle.setText("ACTIVE  •  " + presetNames[selectedPreset]);
+    if (presetTitle != null) {
+        if (currentPage.equals("HOME")) {
+            presetTitle.setText("PRESET  •  " + getPresetName(selectedPreset));
+        } else {
+            presetTitle.setText("ACTIVE  •  " + getPresetName(selectedPreset));
         }
-        if (presetSpinner != null && presetSpinner.getSelectedItemPosition() != selectedPreset) presetSpinner.setSelection(selectedPreset);
     }
+
+    if (presetSpinner != null) {
+        if (presetSpinner.getSelectedItemPosition() != selectedPreset) {
+            presetSpinner.setSelection(selectedPreset);
+        }
+    }
+            }
 
     private void refreshEffectControlUi() {
         for (int i = 0; i < EFFECT_COUNT; i++) {
