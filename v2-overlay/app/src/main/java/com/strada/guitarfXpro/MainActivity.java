@@ -114,7 +114,9 @@ public class MainActivity extends Activity {
     // Atomic values make controls safely visible to the audio thread without locking each sample.
     private final AtomicIntegerArray effectEnabled = new AtomicIntegerArray(EFFECT_COUNT);
     private final AtomicIntegerArray effectParams = new AtomicIntegerArray(EFFECT_COUNT * PARAMS_PER_EFFECT);
-
+    private SharedPreferences presetPreferences;
+    private final java.util.ArrayList<String> customPresetNames = new java.util.ArrayList<>();
+    
     private LinearLayout root;
     private LinearLayout pageContainer;
     private LinearLayout bottomNavigation;
