@@ -569,6 +569,9 @@ public class MainActivity extends Activity {
         audioStatus = text(audioMessage, 11, MUTED, false);
         audioStatus.setPadding(0, dp(8), 0, dp(8));
         c.addView(audioStatus);
+        usbStatus = text("USB AUDIO: memeriksa perangkat...", 11, CYAN, true);
+        usbStatus.setPadding(0, dp(8), 0, dp(8));
+        c.addView(usbStatus);
         TextView limitations = text("Perhatian: Android menentukan ketersediaan perangkat audio eksternal. Jika USB tidak terdeteksi atau tidak dapat di-route oleh sistem, aplikasi tidak bisa memaksakan input/output tersebut. Bluetooth audio umumnya memiliki latensi yang kurang cocok untuk monitoring gitar real-time.", 10, MUTED, false);
         limitations.setPadding(0, dp(10), 0, dp(5));
         c.addView(limitations);
