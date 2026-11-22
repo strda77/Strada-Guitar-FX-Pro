@@ -2,6 +2,9 @@ package com.strada.guitarfXpro;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.SharedPreferences;
+import android.text.InputType;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Canvas;
