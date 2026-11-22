@@ -1026,6 +1026,11 @@ public class MainActivity extends Activity {
         selectedAmp = selectedPreset % ampNames.length;
         selectedCab = (selectedPreset + 5) % cabNames.length;
         masterVolume = 0.55f + (selectedPreset % 5) * 0.08f;
+        if (loadPresetProfile(selectedPreset)) {
+            updatePresetLabels();
+            refreshEffectControlUi();
+            return;
+        }
         if (masterSeek != null) masterSeek.setProgress(Math.round(masterVolume * 100));
         updateMasterValue(Math.round(masterVolume * 100));
         updatePresetLabels();
