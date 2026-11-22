@@ -268,9 +268,9 @@ public class MainActivity extends Activity {
         LinearLayout hero = card(CYAN);
         root.addView(hero);
         sectionIn(hero, "MAIN CONTROL", "Preset, master output, and audio engine");
-        presetTitle = text("PRESET  •  " + presetNames[selectedPreset], 16, TEXT, true);
+        presetTitle = setText("PRESET  •  " + getPresetNames(selectedPreset), 16, TEXT, true);
         hero.addView(presetTitle);
-        Spinner s = spinner(presetNames);
+        Spinner s = spinner(getAllPresetNames());
         presetSpinner = s;
         s.setSelection(selectedPreset);
         hero.addView(s, new LinearLayout.LayoutParams(-1, dp(48)));
@@ -511,9 +511,9 @@ public class MainActivity extends Activity {
         section("PRESET LIBRARY", "60 preset dasar. Memilih preset mengubah state efek dan amp; hasil suara tetap bergantung pada input/output perangkat.");
         LinearLayout c = card(BLUE);
         root.addView(c);
-        presetTitle = text("ACTIVE  •  " + presetNames[selectedPreset], 16, CYAN, true);
+        presetTitle = setText("ACTIVE  •  " + getPresetNames(selectedPreset), 16, CYAN, true);
         c.addView(presetTitle);
-        presetSpinner = spinner(presetNames);
+        presetSpinner = spinner(getAllPresetNames());
         presetSpinner.setSelection(selectedPreset);
         c.addView(presetSpinner, new LinearLayout.LayoutParams(-1, dp(50)));
         presetSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
@@ -531,7 +531,7 @@ public class MainActivity extends Activity {
         load.setOnClickListener(v -> {
             applyPresetValues(presetSpinner.getSelectedItemPosition());
             updatePresetLabels();
-            Toast.makeText(this, "Preset diterapkan: " + getpresetNames[selectedPreset], Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Preset diterapkan: " + getPresetName(selectedPreset), Toast.LENGTH_SHORT).show();
         });
         TextView info = text("Preset dapat kamu ubah lagi dari halaman Pedalboard dan Amp/Cab. Perubahan belum disimpan sebagai preset pengguna setelah aplikasi ditutup.", 10, MUTED, false);
         info.setPadding(0, dp(12), 0, dp(4));
