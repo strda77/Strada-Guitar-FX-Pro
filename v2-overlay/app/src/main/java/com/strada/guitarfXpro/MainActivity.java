@@ -177,6 +177,7 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         for (int i = 0; i < effectParams.length(); i++) effectParams.set(i, 50);
+        presetPreferences = getSharedPreferences("strada_preset_profiles", MODE_PRIVATE);
         applyPresetValues(0);
         buildUi();
         usbAudioDetector = new UsbAudioDetector(this, report ->
