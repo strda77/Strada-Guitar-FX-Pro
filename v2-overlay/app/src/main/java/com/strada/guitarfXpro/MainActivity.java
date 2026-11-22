@@ -33,6 +33,7 @@ import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.EditText;
 import org.json.JSONArray;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicIntegerArray;
@@ -1053,6 +1054,75 @@ public class MainActivity extends Activity {
         refreshEffectControlUi();
     }
 
+    private void showSaveAsDialog() {
+    EditText nameInput = new EditText(this);
+    nameInput.setSingleLine(true);
+    nameInput.setHint("Nama preset baru");
+    nameInput.setInputType(
+            InputType.TYPE_CLASS_TEXT |
+            InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+    );
+
+    new AlertDialog.Builder(this)
+            .setTitle("SAVE AS • NEW PRESET")
+            .setMessage("Masukkan nama preset yang ingin disimpan.")
+            .setView(nameInput)
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("SAVE", (dialog, which) -> {
+                String name = nameInput.getText().toString().trim();
+
+                if (name.isEmpty()) {
+                    Toast.makeText(this,
+                            "Nama preset tidak boleh kosong.",
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                for (String existing : getAllPresetNames()) {
+                    if (existing.equalsIgnoreCase(name)) {
+                        Toast.makeText(this,
+                                "Nama preset sudah digunakan.",
+                                Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                }
+
+                customPresetNames.add(name);
+
+                JSONArray names = new JSONArray();
+                for (String item : customPresetNames) {
+                    names.put(item);
+                }
+
+                presetPreferences.edit()
+                        .putString("custom_preset_names", names.toString())
+                        .apply();
+
+                selectedPreset = presetNames.length
+                        + customPresetNames.size() - 1;
+
+                savePresetProfile(selectedPreset);
+
+                if (presetSpinner != null) {
+                    ArrayAdapter<String> adapter =
+                            new ArrayAdapter<>(this,
+                                    android.R.layout.simple_spinner_item,
+                                    getAllPresetNames());
+                    adapter.setDropDownViewResource(
+                            android.R.layout.simple_spinner_dropdown_item);
+                    presetSpinner.setAdapter(adapter);
+                    presetSpinner.setSelection(selectedPreset);
+                }
+
+                updatePresetLabels();
+
+                Toast.makeText(this,
+                        "Preset baru berhasil disimpan: " + name,
+                        Toast.LENGTH_SHORT).show();
+            })
+            .show();
+
+    }
     private void loadCustomPresetNames() {
     customPresetNames.clear();
     String saved = presetPreferences.getString("custom_preset_names", "[]");
