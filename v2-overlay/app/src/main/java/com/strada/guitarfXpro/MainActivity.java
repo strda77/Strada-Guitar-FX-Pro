@@ -120,6 +120,8 @@ public class MainActivity extends Activity {
 
     private TextView presetTitle;
     private TextView audioStatus;
+    private TextView usbStatus;
+    private UsbAudioDetector usbAudioDetector;
     private TextView masterValue;
     private TextView tunerNote;
     private TextView loopStatus;
