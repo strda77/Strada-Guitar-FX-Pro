@@ -532,7 +532,22 @@ public class MainActivity extends Activity {
             applyPresetValues(presetSpinner.getSelectedItemPosition());
             updatePresetLabels();
             Toast.makeText(this, "Preset diterapkan: " + getPresetName(selectedPreset), Toast.LENGTH_SHORT).show();
-        });
+        });        
+        Button save = new Button(this);
+        styleButton(save, "SAVE • OVERWRITE PRESET", GREEN);
+        c.addView(save, new LinearLayout.LayoutParams(-1, dp(48)));
+
+        save.setOnClickListener(v -> {
+        savePresetProfile(selectedPreset);
+        Toast.makeText(this,
+            "Preset berhasil disimpan: " + getPresetName(selectedPreset),
+            Toast.LENGTH_SHORT).show();
+        });       
+        Button saveAs = new Button(this);
+        styleButton(saveAs, "SAVE AS • NEW PRESET", PURPLE);
+        c.addView(saveAs, new LinearLayout.LayoutParams(-1, dp(48)));
+
+        saveAs.setOnClickListener(v -> showSaveAsDialog());
         TextView info = text("Preset dapat kamu ubah lagi dari halaman Pedalboard dan Amp/Cab. Perubahan belum disimpan sebagai preset pengguna setelah aplikasi ditutup.", 10, MUTED, false);
         info.setPadding(0, dp(12), 0, dp(4));
         c.addView(info);
