@@ -1032,6 +1032,36 @@ public class MainActivity extends Activity {
         refreshEffectControlUi();
     }
 
+    private void savePresetProfile(int index) {
+    if (presetPreferences == null) return;
+
+    SharedPreferences.Editor editor = presetPreferences.edit();
+    String key = "preset_" + index + "_";
+
+    editor.putInt(key + "amp", selectedAmp);
+    editor.putInt(key + "cab", selectedCab);
+    editor.putBoolean(key + "ampOn", ampOn);
+    editor.putBoolean(key + "cabOn", cabOn);
+
+    editor.putFloat(key + "gain", ampGain);
+    editor.putFloat(key + "bass", ampBass);
+    editor.putFloat(key + "middle", ampMiddle);
+    editor.putFloat(key + "treble", ampTreble);
+    editor.putFloat(key + "ampVolume", ampVolume);
+    editor.putFloat(key + "masterVolume", masterVolume);
+
+    for (int i = 0; i < EFFECT_COUNT; i++) {
+        editor.putBoolean(key + "effect_" + i,
+                effectEnabled.get(i) != 0);
+
+        for (int j = 0; j < paramNames[i].length; j++) {
+            editor.putInt(key + "param_" + i + "_" + j,
+                    getParam(i, j));
+        }
+    }
+        editor.apply();
+    }
+    
     private void updatePresetLabels() {
         if (presetTitle != null) {
             if (currentPage.equals("HOME")) presetTitle.setText("PRESET  •  " + presetNames[selectedPreset]);
