@@ -1409,9 +1409,13 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
-        audioRunning = false;
-        loopRecording = false;
-        loopPlaying = false;
-        super.onDestroy();
+    audioRunning = false;
+    loopRecording = false;
+    loopPlaying = false;
+
+    if (usbAudioDetector != null) {
+        usbAudioDetector.stop();
     }
+
+    super.onDestroy();
     }
