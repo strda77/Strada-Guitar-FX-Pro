@@ -268,7 +268,7 @@ public class MainActivity extends Activity {
         LinearLayout hero = card(CYAN);
         root.addView(hero);
         sectionIn(hero, "MAIN CONTROL", "Preset, master output, and audio engine");
-        presetTitle = setText("PRESET  •  " + getPresetNames(selectedPreset), 16, TEXT, true);
+        presetTitle = text("PRESET  •  " + getPresetName(selectedPreset), 16, TEXT, true);
         hero.addView(presetTitle);
         Spinner s = spinner(getAllPresetNames());
         presetSpinner = s;
@@ -511,7 +511,7 @@ public class MainActivity extends Activity {
         section("PRESET LIBRARY", "60 preset dasar. Memilih preset mengubah state efek dan amp; hasil suara tetap bergantung pada input/output perangkat.");
         LinearLayout c = card(BLUE);
         root.addView(c);
-        presetTitle = setText("ACTIVE  •  " + getPresetNames(selectedPreset), 16, CYAN, true);
+        presetTitle = text("ACTIVE  •  " + getPresetName(selectedPreset), 16, CYAN, true);
         c.addView(presetTitle);
         presetSpinner = spinner(getAllPresetNames());
         presetSpinner.setSelection(selectedPreset);
