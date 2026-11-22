@@ -174,6 +174,13 @@ public class MainActivity extends Activity {
         for (int i = 0; i < effectParams.length(); i++) effectParams.set(i, 50);
         applyPresetValues(0);
         buildUi();
+        usbAudioDetector = new UsbAudioDetector(this, report ->
+        runOnUiThread(() -> {
+            if (usbStatus != null) {
+                usbStatus.setText(report);
+            }
+        })
+    );
     }
 
     private void buildUi() {
