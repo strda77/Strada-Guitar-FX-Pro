@@ -33,7 +33,7 @@ import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
-
+import org.json.JSONArray;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 
@@ -178,6 +178,7 @@ public class MainActivity extends Activity {
         getWindow().setNavigationBarColor(BG);
         for (int i = 0; i < effectParams.length(); i++) effectParams.set(i, 50);
         presetPreferences = getSharedPreferences("strada_preset_profiles", MODE_PRIVATE);
+        loadCustomPresetNames();
         applyPresetValues(0);
         buildUi();
         usbAudioDetector = new UsbAudioDetector(this, report ->
@@ -1037,6 +1038,34 @@ public class MainActivity extends Activity {
         refreshEffectControlUi();
     }
 
+    private void loadCustomPresetNames() {
+    customPresetNames.clear();
+    String saved = presetPreferences.getString("custom_preset_names", "[]");
+
+    try {
+        JSONArray names = new JSONArray(saved);
+        for (int i = 0; i < names.length(); i++) {
+            customPresetNames.add(names.getString(i));
+        }
+    } catch (Exception e) {
+        customPresetNames.clear();
+    }
+}
+
+private String[] getAllPresetNames() {
+    java.util.ArrayList<String> all = new java.util.ArrayList<>();
+    java.util.Collections.addAll(all, presetNames);
+    all.addAll(customPresetNames);
+    return all.toArray(new String[0]);
+}
+
+private String getPresetName(int index) {
+    if (index < presetNames.length) {
+        return presetNames[index];
+    }
+    return customPresetNames.get(index - presetNames.length);
+        }
+    
     private void savePresetProfile(int index) {
     if (presetPreferences == null) return;
 
