@@ -647,7 +647,8 @@ public class MainActivity extends Activity {
     private interface IntChanged { void onChanged(int value); }
     private interface ToggleChanged { void onChanged(boolean value); }
 
-    private void addToggleRow(LinearLayout parent, String label, boolean initial,
+    private void addToggleRow(LinearLayout parent, String label, 
+                              boolean initial,
                               ToggleChanged changed, int accent) {
         LinearLayout r = row();
         parent.addView(r);
@@ -1130,6 +1131,9 @@ pitchTracker.add(in, count, this);
         selectedAmp = selectedPreset % ampNames.length;
         selectedCab = (selectedPreset + 5) % cabNames.length;
         masterVolume = 0.55f + (selectedPreset % 5) * 0.08f;
+        // Default ON untuk preset bawaan.
+        ampOn = true;
+        cabOn = true;
         if (loadPresetProfile(selectedPreset)) {
             updatePresetLabels();
             refreshEffectControlUi();
