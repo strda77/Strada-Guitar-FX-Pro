@@ -909,45 +909,113 @@ public class MainActivity extends Activity {
             audioThread = null;
         }
     }
-
+    
     private void requestPreferredDevices(AudioRecord recorder, AudioTrack track) {
-        if (Build.VERSION.SDK_INT < 23) {
-            setAudioMessage("Audio aktif; pemilihan perangkat manual memerlukan Android 6 atau lebih baru.");
-            return;
-        }
-        try {
-            if (!"Microphone (HP)".equals(selectedInput)) {
-                AudioDeviceInfo[] inputs = getAudioDevices(AudioManager.GET_DEVICES_INPUTS);
-                AudioDeviceInfo chosen = null;
-                for (AudioDeviceInfo d : inputs) {
-                    int type = d.getType();
-                    boolean usb = type == AudioDeviceInfo.TYPE_USB_DEVICE || (Build.VERSION.SDK_INT >= 26 && type == AudioDeviceInfo.TYPE_USB_HEADSET);
-                    boolean wired = type == AudioDeviceInfo.TYPE_WIRED_HEADSET;
-                    if ((selectedInput.startsWith("USB") && usb) || (selectedInput.startsWith("Wired") && wired)) { chosen = d; break; }
-                }
-                if (chosen != null) recorder.setPreferredDevice(chosen);
-                else setAudioMessage("Input " + selectedInput + " tidak ditemukan; Android memakai input default.");
-            }
-            if ("Speaker".equals(selectedOutput)) {
-                AudioDeviceInfo[] outputs = getAudioDevices(AudioManager.GET_DEVICES_OUTPUTS);
-                for (AudioDeviceInfo d : outputs) {
-                    if (d.getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) { track.setPreferredDevice(d); break; }
-                }
-            } else if ("USB Audio Output".equals(selectedOutput)) {
-                AudioDeviceInfo[] outputs = getAudioDevices(AudioManager.GET_DEVICES_OUTPUTS);
-                AudioDeviceInfo chosen = null;
-                for (AudioDeviceInfo d : outputs) {
-                    int type = d.getType();
-                    boolean usb = type == AudioDeviceInfo.TYPE_USB_DEVICE || (Build.VERSION.SDK_INT >= 26 && type == AudioDeviceInfo.TYPE_USB_HEADSET);
-                    if (usb) { chosen = d; break; }
-                }
-                if (chosen != null) track.setPreferredDevice(chosen);
-                else setAudioMessage("USB output tidak ditemukan; Android memakai output default.");
-            }
-        } catch (Exception e) {
-            setAudioMessage("Routing perangkat tidak tersedia: " + e.getMessage());
-        }
+    if (Build.VERSION.SDK_INT < 23) {
+        setAudioMessage("Pemilihan perangkat manual membutuhkan Android 6.0 atau lebih baru.");
+        return;
     }
+
+    StringBuilder report = new StringBuilder();
+    AudioDeviceInfo chosenInput = null;
+    AudioDeviceInfo chosenOutput = null;
+
+    try {
+        // PILIH INPUT
+        AudioDeviceInfo[] inputs =
+                getAudioDevices(AudioManager.GET_DEVICES_INPUTS);
+
+        for (AudioDeviceInfo d : inputs) {
+            if (!d.isSource()) continue;
+
+            int type = d.getType();
+
+            if ("Microphone (HP)".equals(selectedInput)
+                    && type == AudioDeviceInfo.TYPE_BUILTIN_MIC) {
+                chosenInput = d;
+                break;
+            }
+
+            if ("USB Audio Interface".equals(selectedInput)) {
+                boolean usb = type == AudioDeviceInfo.TYPE_USB_DEVICE
+                        || (Build.VERSION.SDK_INT >= 26
+                        && type == AudioDeviceInfo.TYPE_USB_HEADSET);
+
+                if (usb) {
+                    chosenInput = d;
+                    break;
+                }
+            }
+
+            if ("Wired Headset Mic".equals(selectedInput)
+                    && type == AudioDeviceInfo.TYPE_WIRED_HEADSET) {
+                chosenInput = d;
+                break;
+            }
+        }
+
+        if (chosenInput != null) {
+            boolean routed = recorder.setPreferredDevice(chosenInput);
+            report.append("Input: ")
+                    .append(chosenInput.getProductName())
+                    .append(routed ? " • berhasil dipilih" : " • routing ditolak")
+                    .append("\n");
+        } else {
+            report.append("Input: perangkat ")
+                    .append(selectedInput)
+                    .append(" tidak ditemukan.\n");
+        }
+
+        // PILIH OUTPUT
+        if ("System / Headphone".equals(selectedOutput)) {
+            report.append("Output: mengikuti routing sistem Android.\n");
+        } else {
+            AudioDeviceInfo[] outputs =
+                    getAudioDevices(AudioManager.GET_DEVICES_OUTPUTS);
+
+            for (AudioDeviceInfo d : outputs) {
+                if (!d.isSink()) continue;
+
+                int type = d.getType();
+
+                if ("Speaker".equals(selectedOutput)
+                        && type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                    chosenOutput = d;
+                    break;
+                }
+
+                if ("USB Audio Output".equals(selectedOutput)) {
+                    boolean usb = type == AudioDeviceInfo.TYPE_USB_DEVICE
+                            || (Build.VERSION.SDK_INT >= 26
+                            && type == AudioDeviceInfo.TYPE_USB_HEADSET);
+
+                    if (usb) {
+                        chosenOutput = d;
+                        break;
+                    }
+                }
+            }
+
+            if (chosenOutput != null) {
+                boolean routed = track.setPreferredDevice(chosenOutput);
+                report.append("Output: ")
+                        .append(chosenOutput.getProductName())
+                        .append(routed ? " • berhasil dipilih" : " • routing ditolak")
+                        .append("\n");
+            } else {
+                report.append("Output: perangkat ")
+                        .append(selectedOutput)
+                        .append(" tidak ditemukan.\n");
+            }
+        }
+
+        setAudioMessage(report.toString());
+
+    } catch (Exception e) {
+        setAudioMessage("Kesalahan routing audio: " + e.getMessage());
+    }
+}
+
 
     private AudioDeviceInfo[] getAudioDevices(int direction) {
         if (Build.VERSION.SDK_INT >= 23) {
