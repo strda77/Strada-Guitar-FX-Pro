@@ -730,7 +730,8 @@ public class MainActivity extends Activity {
             track.play();
             recorder.startRecording();
             setAudioMessage("Status: AUDIO RUNNING • gunakan headphone untuk mengurangi feedback");
-
+            boolean routeReported = false;
+      
             while (audioRunning) {
                 int count = recorder.read(in, 0, in.length);
                 if (count == AudioRecord.ERROR_INVALID_OPERATION || count == AudioRecord.ERROR_BAD_VALUE || count < 0)
@@ -877,10 +878,28 @@ public class MainActivity extends Activity {
                     processed = clampFloat(processed, -0.95f, 0.95f);
                     out[i] = (short) (processed * 32767f);
                 }
+
+                
                 int written = track.write(out, 0, count);
                 if (written < 0) throw new IllegalStateException("AudioTrack write gagal: " + written);
-                pitchTracker.add(in, count, this);
-            }
+
+                // Periksa perangkat audio yang benar-benar digunakan Android.
+                if (!routeReported && Build.VERSION.SDK_INT >= 24) {
+                AudioDeviceInfo activeInput = recorder.getRoutedDevice();
+                AudioDeviceInfo activeOutput = track.getRoutedDevice();
+
+               if (activeInput != null && activeOutput != null) {
+               setAudioMessage(
+                "AUDIO RUNNING\n"
+                + "Input aktif: " + activeInput.getProductName()
+                + "\nOutput aktif: " + activeOutput.getProductName()
+        );
+        routeReported = true;
+    }
+}
+
+pitchTracker.add(in, count, this);
+                
         } catch (Exception e) {
             failure = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
         } finally {
