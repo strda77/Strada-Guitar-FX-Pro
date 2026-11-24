@@ -3,9 +3,8 @@ package com.strada.guitarfXpro;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.SharedPreferences;
-import android.text.InputType;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -13,39 +12,28 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.media.AudioDeviceInfo;
-import android.media.AudioFormat;
-import android.media.AudioManager;
-import android.media.AudioRecord;
-import android.media.AudioTrack;
-import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.EditText;
-import org.json.JSONArray;
-import java.util.Locale;
-import java.util.concurrent.atomic.AtomicIntegerArray;
 
-/**
- * Strada Guitar FX Pro - self-contained Java UI and basic real-time DSP engine.
- *
- * IMPORTANT: this is a functional prototype engine, not a certified/pro-grade amp modeller.
- * Amp/cab blocks are algorithmic approximations, not captured amp profiles or IR convolution.
- * Test with headphones and the actual target Android devices before publishing.
- */
-public class MainActivity extends Activity {
+import java.util.ArrayList;
+import java.util.Locale;
+
+public class MainActivity extends Activity implements AudioEngine.Listener {
+
     private static final int BG = Color.rgb(7, 10, 18);
     private static final int PANEL = Color.rgb(15, 22, 36);
     private static final int TEXT = Color.rgb(238, 246, 255);
@@ -57,10 +45,7 @@ public class MainActivity extends Activity {
     private static final int BLUE = Color.rgb(35, 130, 255);
     private static final int RED = Color.rgb(255, 60, 75);
     private static final int REQUEST_AUDIO = 1001;
-    private static final int SAMPLE_RATE = 44100;
-    private static final int FRAMES_PER_READ = 256;
     private static final int EFFECT_COUNT = 8;
-    private static final int PARAMS_PER_EFFECT = 3;
 
     private final String[] presetNames = {
         "Clean Glass", "Warm Clean", "Studio Clean", "Bright Clean", "Jazz Clean",
@@ -86,8 +71,8 @@ public class MainActivity extends Activity {
         Color.rgb(0, 220, 230), ORANGE
     };
     private final String[][] paramNames = {
-        {"Threshold", "Release"},
-        {"Sustain", "Level"},
+        {"Threshold", "Release", ""},
+        {"Sustain", "Level", ""},
         {"Drive", "Tone", "Level"},
         {"Gain", "Tone", "Level"},
         {"Gain", "Tone", "Level"},
@@ -112,13 +97,10 @@ public class MainActivity extends Activity {
         "System / Headphone", "Speaker", "USB Audio Output"
     };
 
-    // Atomic values make controls safely visible to the audio thread without locking each sample.
-    private final AtomicIntegerArray effectEnabled = new AtomicIntegerArray(EFFECT_COUNT);
-    private final AtomicIntegerArray effectParams = new AtomicIntegerArray(EFFECT_COUNT * PARAMS_PER_EFFECT);
-    private SharedPreferences presetPreferences;
-    private final java.util.ArrayList<String> customPresetNames = new java.util.ArrayList<>();
-    
-    private LinearLayout root;
+    private SharedPreferences preferences;
+    private final ArrayList<String> customPresetNames = new ArrayList<>();
+    private AudioEngine audioEngine;
+
     private LinearLayout pageContainer;
     private LinearLayout bottomNavigation;
     private ScrollView mainScroll;
@@ -126,69 +108,58 @@ public class MainActivity extends Activity {
 
     private TextView presetTitle;
     private TextView audioStatus;
-    private TextView usbStatus;
-    private UsbAudioDetector usbAudioDetector;
     private TextView masterValue;
     private TextView tunerNote;
     private TextView loopStatus;
     private Button audioToggleButton;
     private Button looperRecordButton;
     private Button looperPlayButton;
-    private Button looperAudioButton;
     private SeekBar masterSeek;
     private Spinner presetSpinner;
     private Spinner ampSpinner;
     private Spinner cabSpinner;
     private Spinner inputSpinner;
     private Spinner outputSpinner;
-    private SeekBar[][] effectSeekBars = new SeekBar[EFFECT_COUNT][PARAMS_PER_EFFECT];
-    private TextView[][] effectParamValues = new TextView[EFFECT_COUNT][PARAMS_PER_EFFECT];
+    private SeekBar[][] effectSeekBars = new SeekBar[EFFECT_COUNT][3];
+    private TextView[][] effectParamValues = new TextView[EFFECT_COUNT][3];
     private PedalFaceView[] pedalViews = new PedalFaceView[EFFECT_COUNT];
 
-    private volatile boolean audioRunning = false;
-    private volatile boolean audioStopping = false;
-    private volatile Thread audioThread;
-    private volatile String audioMessage = "Status: audio belum berjalan";
-    private volatile float masterVolume = 0.72f;
-    private volatile float ampGain = 3.0f;
-    private volatile float ampBass = 0.50f;
-    private volatile float ampMiddle = 0.50f;
-    private volatile float ampTreble = 0.60f;
-    private volatile float ampVolume = 0.70f;
-    private volatile boolean ampOn = true;
-    private volatile boolean cabOn = true;
-    private volatile boolean loopRecording = false;
-    private volatile boolean loopPlaying = false;
-    private volatile int loopLength = 0;
-    private volatile int loopWritePos = 0;
-    private volatile int loopReadPos = 0;
-    private volatile int selectedPreset = 0;
-    private volatile int selectedAmp = 0;
-    private volatile int selectedCab = 5;
-    private volatile float tunerFrequency = 0f;
-    private volatile String selectedInput = "Microphone (HP)";
-    private volatile String selectedOutput = "System / Headphone";
+    private final boolean[] effectEnabled = new boolean[EFFECT_COUNT];
+    private final int[][] effectParams = new int[EFFECT_COUNT][3];
 
-    // Up to 30 seconds of mono, 16-bit loop audio (about 2.6 MB).
-    private final short[] loopBuffer = new short[SAMPLE_RATE * 30];
+    private float masterVolume = .72f;
+    private float ampGain = 3f;
+    private float ampBass = .5f;
+    private float ampMiddle = .5f;
+    private float ampTreble = .6f;
+    private float ampVolume = .7f;
+    private boolean ampOn = true;
+    private boolean cabOn = true;
+    private int selectedPreset;
+    private int selectedAmp;
+    private int selectedCab = 5;
+    private String selectedInput = "Microphone (HP)";
+    private String selectedOutput = "System / Headphone";
+    private volatile float tunerFrequency;
+    private volatile boolean loopRecording;
+    private volatile boolean loopPlaying;
+    private volatile int loopLength;
+    private volatile String audioMessage = "Status: audio belum berjalan";
 
     @Override
     public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
-        for (int i = 0; i < effectParams.length(); i++) effectParams.set(i, 50);
-        presetPreferences = getSharedPreferences("strada_preset_profiles", MODE_PRIVATE);
+        preferences = getSharedPreferences("strada_preset_profiles", MODE_PRIVATE);
+        for (int i = 0; i < EFFECT_COUNT; i++) {
+            for (int j = 0; j < 3; j++) effectParams[i][j] = 50;
+        }
         loadCustomPresetNames();
-        applyPresetValues(0);
+        applyPresetValues(0, false);
+        audioEngine = new AudioEngine(this, this);
+        pushSettings();
         buildUi();
-        usbAudioDetector = new UsbAudioDetector(this, report ->
-        runOnUiThread(() -> {
-            if (usbStatus != null) {
-                usbStatus.setText(report);
-            }
-        })
-    );
     }
 
     private void buildUi() {
@@ -203,7 +174,6 @@ public class MainActivity extends Activity {
 
         mainScroll = new ScrollView(this);
         mainScroll.setFillViewport(true);
-        mainScroll.setBackgroundColor(BG);
         mainScroll.addView(pageContainer);
         screen.addView(mainScroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
@@ -215,16 +185,13 @@ public class MainActivity extends Activity {
         screen.addView(bottomNavigation, new LinearLayout.LayoutParams(-1, dp(62)));
 
         setContentView(screen);
-        root = pageContainer;
         showPage("HOME");
         setupNavigation();
     }
 
     private void showPage(String page) {
         currentPage = page;
-        if (pageContainer == null) return;
         pageContainer.removeAllViews();
-        root = pageContainer;
         presetTitle = null;
         audioStatus = null;
         masterValue = null;
@@ -233,15 +200,14 @@ public class MainActivity extends Activity {
         audioToggleButton = null;
         looperRecordButton = null;
         looperPlayButton = null;
-        looperAudioButton = null;
         masterSeek = null;
         presetSpinner = null;
         ampSpinner = null;
         cabSpinner = null;
         inputSpinner = null;
         outputSpinner = null;
-        effectSeekBars = new SeekBar[EFFECT_COUNT][PARAMS_PER_EFFECT];
-        effectParamValues = new TextView[EFFECT_COUNT][PARAMS_PER_EFFECT];
+        effectSeekBars = new SeekBar[EFFECT_COUNT][3];
+        effectParamValues = new TextView[EFFECT_COUNT][3];
         pedalViews = new PedalFaceView[EFFECT_COUNT];
 
         switch (page) {
@@ -254,39 +220,36 @@ public class MainActivity extends Activity {
             case "AUDIO": buildAudioPage(); break;
             default: section("STRADA", "Halaman tidak ditemukan."); break;
         }
-        if (mainScroll != null) mainScroll.post(() -> mainScroll.scrollTo(0, 0));
+        setupNavigation();
+        mainScroll.post(() -> mainScroll.scrollTo(0, 0));
     }
 
     private void buildHomePage() {
         TextView logo = text("STRADA", 34, CYAN, true);
-        logo.setLetterSpacing(0.14f);
+        logo.setLetterSpacing(.14f);
         logo.setPadding(dp(4), dp(8), dp(4), 0);
-        root.addView(logo);
-        TextView subtitle = text("GUITAR FX PRO  •  REAL-TIME EFFECTS", 12, PURPLE, true);
-        subtitle.setPadding(dp(5), 0, 0, dp(10));
-        root.addView(subtitle);
+        pageContainer.addView(logo);
+        pageContainer.addView(text("GUITAR FX PRO  •  REAL-TIME EFFECTS", 12, PURPLE, true));
 
         LinearLayout hero = card(CYAN);
-        root.addView(hero);
+        pageContainer.addView(hero);
         sectionIn(hero, "MAIN CONTROL", "Preset, master output, and audio engine");
         presetTitle = text("PRESET  •  " + getPresetName(selectedPreset), 16, TEXT, true);
         hero.addView(presetTitle);
-        Spinner s = spinner(getAllPresetNames());
-        presetSpinner = s;
-        s.setSelection(selectedPreset);
-        hero.addView(s, new LinearLayout.LayoutParams(-1, dp(48)));
-        s.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            private boolean first = true;
-            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+        presetSpinner = spinner(getAllPresetNames());
+        presetSpinner.setSelection(selectedPreset);
+        hero.addView(presetSpinner, new LinearLayout.LayoutParams(-1, dp(48)));
+        presetSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            boolean first = true;
+            @Override public void onItemSelected(AdapterView<?> p, View v, int position, long id) {
                 if (first) { first = false; return; }
-                applyPresetValues(position);
-                updatePresetLabels();
+                applyPresetValues(position, true);
             }
-            @Override public void onNothingSelected(AdapterView<?> parent) {}
+            @Override public void onNothingSelected(AdapterView<?> p) {}
         });
 
         addControl(hero, "MASTER VOLUME", 0, 100, Math.round(masterVolume * 100), CYAN,
-                value -> { masterVolume = value / 100f; updateMasterValue(value); });
+                value -> { masterVolume = value / 100f; updateMasterValue(value); pushSettings(); });
         masterValue = text("Master: " + Math.round(masterVolume * 100) + "%", 12, CYAN, true);
         hero.addView(masterValue);
         addAudioToggle(hero);
@@ -301,82 +264,60 @@ public class MainActivity extends Activity {
         addHomeButton("LOOPER  →", ORANGE, "LOOPER");
         addHomeButton("PRESET LIBRARY  •  60 TONES  →", BLUE, "PRESETS");
         addHomeButton("AUDIO INPUT / OUTPUT  →", RED, "AUDIO");
-        TextView note = text("Tip: gunakan headphone/earphone untuk mengurangi feedback dari mikrofon HP.", 10, MUTED, false);
-        note.setPadding(dp(2), dp(12), dp(2), dp(8));
-        root.addView(note);
-    }
-
-    private void addHomeButton(String label, int accent, String page) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setTextColor(TEXT);
-        b.setAllCaps(false);
-        b.setTextSize(12);
-        b.setGravity(Gravity.CENTER_VERTICAL);
-        b.setPadding(dp(12), 0, dp(8), 0);
-        b.setBackground(bgShape(PANEL, accent));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(48));
-        lp.setMargins(0, dp(4), 0, dp(4));
-        root.addView(b, lp);
-        b.setOnClickListener(v -> navigate(page));
+        pageContainer.addView(text("Gunakan headphone untuk mengurangi feedback dari mikrofon HP.", 10, MUTED, false));
     }
 
     private void buildPedalboardPage() {
-        section("FULL COLOR PEDALBOARD", "Ketuk kenop pada gambar atau gunakan slider di bawahnya. Sakelar pedal mengubah ON/OFF.");
-        for (int i = 0; i < effectNames.length; i++) addEffectCard(i);
+        section("FULL COLOR PEDALBOARD", "Ketuk pedal untuk ON/OFF. Geser kenop atau gunakan slider.");
+        for (int i = 0; i < EFFECT_COUNT; i++) {
+            final int id = i;
+            PedalFaceView pedal = new PedalFaceView(this, id);
+            pedalViews[id] = pedal;
+            LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1, dp(205));
+            pp.setMargins(0, dp(7), 0, dp(2));
+            pageContainer.addView(pedal, pp);
+            LinearLayout c = card(effectColors[id]);
+            pageContainer.addView(c);
+            LinearLayout head = row();
+            c.addView(head);
+            head.addView(text(effectNames[id] + " PARAMETERS", 14, effectColors[id], true),
+                    new LinearLayout.LayoutParams(0, -2, 1));
+            Button toggle = new Button(this);
+            styleButton(toggle, effectEnabled[id] ? "ON" : "OFF", effectColors[id]);
+            head.addView(toggle, new LinearLayout.LayoutParams(dp(78), dp(40)));
+            toggle.setOnClickListener(v -> {
+                effectEnabled[id] = !effectEnabled[id];
+                toggle.setText(effectEnabled[id] ? "ON" : "OFF");
+                toggle.setBackground(bgShape(effectEnabled[id] ? effectColors[id] : Color.DKGRAY, effectColors[id]));
+                pedal.invalidate();
+                pushSettings();
+            });
+            c.addView(text(effectDescription(id), 10, MUTED, false));
+            for (int j = 0; j < paramCount(id); j++) addEffectParamControl(c, id, j);
+        }
     }
 
-    private void addEffectCard(int id) {
-        if (id < 0 || id >= EFFECT_COUNT) return;
-        PedalFaceView pedal = new PedalFaceView(this, id);
-        pedalViews[id] = pedal;
-        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1, dp(205));
-        pp.setMargins(0, dp(7), 0, dp(2));
-        root.addView(pedal, pp);
-        addEffectControls(id);
-    }
-
-    private void addEffectControls(int id) {
-        int accent = effectColors[id];
-        LinearLayout c = card(accent);
-        root.addView(c);
-        LinearLayout head = row();
-        c.addView(head);
-        TextView title = text(effectNames[id] + "  PARAMETERS", 14, accent, true);
-        head.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        Button toggle = new Button(this);
-        styleButton(toggle, isEffectOn(id) ? "ON" : "OFF", accent);
-        head.addView(toggle, new LinearLayout.LayoutParams(dp(78), dp(40)));
-        toggle.setOnClickListener(v -> {
-            setEffectOn(id, !isEffectOn(id));
-            toggle.setText(isEffectOn(id) ? "ON" : "OFF");
-            toggle.setBackground(bgShape(isEffectOn(id) ? accent : Color.rgb(43, 49, 65), accent));
-            if (pedalViews[id] != null) pedalViews[id].invalidate();
-        });
-        c.addView(text(effectDescription(id), 10, MUTED, false));
-        for (int j = 0; j < paramNames[id].length; j++) addEffectParamControl(c, id, j, accent);
-    }
-
-    private void addEffectParamControl(LinearLayout parent, int id, int paramIndex, int accent) {
+    private void addEffectParamControl(LinearLayout parent, int id, int index) {
         LinearLayout line = new LinearLayout(this);
         line.setOrientation(LinearLayout.VERTICAL);
         line.setPadding(0, dp(4), 0, dp(2));
         parent.addView(line);
-        int initial = getParam(id, paramIndex);
-        TextView value = text(paramNames[id][paramIndex] + "  " + initial, 11, TEXT, true);
+        int initial = effectParams[id][index];
+        TextView value = text(paramNames[id][index] + "  " + initial, 11, TEXT, true);
         line.addView(value);
         SeekBar seek = new SeekBar(this);
         seek.setMax(100);
         seek.setProgress(initial);
-        tintSeek(seek, accent);
+        tintSeek(seek, effectColors[id]);
         line.addView(seek);
-        effectSeekBars[id][paramIndex] = seek;
-        effectParamValues[id][paramIndex] = value;
+        effectSeekBars[id][index] = seek;
+        effectParamValues[id][index] = value;
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
-                setParam(id, paramIndex, progress);
-                value.setText(paramNames[id][paramIndex] + "  " + progress);
+                effectParams[id][index] = progress;
+                value.setText(paramNames[id][index] + "  " + progress);
                 if (pedalViews[id] != null) pedalViews[id].invalidate();
+                pushSettings();
             }
             @Override public void onStartTrackingTouch(SeekBar bar) {}
             @Override public void onStopTrackingTouch(SeekBar bar) {}
@@ -384,732 +325,237 @@ public class MainActivity extends Activity {
     }
 
     private void buildAmpCabPage() {
-        section("AMPLIFIER & CABINET", "Model amp dan cabinet ini adalah simulasi DSP sederhana, bukan capture/IR profesional.");
+        section("AMPLIFIER & CABINET", "Model amp/cab saat ini menggunakan algoritma dasar, bukan capture atau IR profesional.");
         LinearLayout ampCard = card(PURPLE);
-        root.addView(ampCard);
-        addToggleRow(ampCard, "AMPLIFIER BLOCK", ampOn, value -> ampOn = value, PURPLE);
+        pageContainer.addView(ampCard);
+        addToggleRow(ampCard, "AMPLIFIER BLOCK", ampOn, value -> { ampOn = value; pushSettings(); }, PURPLE);
         ampCard.addView(text("AMP MODEL", 11, MUTED, true));
         ampSpinner = spinner(ampNames);
         ampSpinner.setSelection(selectedAmp);
         ampCard.addView(ampSpinner, new LinearLayout.LayoutParams(-1, dp(48)));
-        ampSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) { selectedAmp = position; }
-            @Override public void onNothingSelected(AdapterView<?> parent) {}
-        });
+        ampSpinner.setOnItemSelectedListener(simpleSelection(value -> { selectedAmp = value; pushSettings(); }));
         addControl(ampCard, "AMP GAIN", 0, 100, gainToUi(ampGain), PURPLE,
-                value -> ampGain = 0.5f + value * 0.075f);
+                value -> { ampGain = .5f + value * .075f; pushSettings(); });
         addControl(ampCard, "AMP VOLUME", 0, 100, Math.round(ampVolume * 100), PURPLE,
-                value -> ampVolume = value / 100f);
+                value -> { ampVolume = value / 100f; pushSettings(); });
         addControl(ampCard, "BASS", 0, 100, Math.round(ampBass * 100), PURPLE,
-                value -> ampBass = value / 100f);
+                value -> { ampBass = value / 100f; pushSettings(); });
         addControl(ampCard, "MIDDLE", 0, 100, Math.round(ampMiddle * 100), PURPLE,
-                value -> ampMiddle = value / 100f);
+                value -> { ampMiddle = value / 100f; pushSettings(); });
         addControl(ampCard, "TREBLE", 0, 100, Math.round(ampTreble * 100), PURPLE,
-                value -> ampTreble = value / 100f);
+                value -> { ampTreble = value / 100f; pushSettings(); });
 
         LinearLayout cabCard = card(CYAN);
-        root.addView(cabCard);
-        addToggleRow(cabCard, "CABINET FILTER", cabOn, value -> cabOn = value, CYAN);
+        pageContainer.addView(cabCard);
+        addToggleRow(cabCard, "CABINET FILTER", cabOn, value -> { cabOn = value; pushSettings(); }, CYAN);
         cabCard.addView(text("CABINET MODEL", 11, MUTED, true));
         cabSpinner = spinner(cabNames);
         cabSpinner.setSelection(selectedCab);
         cabCard.addView(cabSpinner, new LinearLayout.LayoutParams(-1, dp(48)));
-        cabSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) { selectedCab = position; }
-            @Override public void onNothingSelected(AdapterView<?> parent) {}
-        });
-        cabCard.addView(text("Catatan: nama model saat ini memilih karakter filter dasar. Belum ada IR loader atau model amplifier berbasis capture.", 10, MUTED, false));
+        cabSpinner.setOnItemSelectedListener(simpleSelection(value -> { selectedCab = value; pushSettings(); }));
+        cabCard.addView(text("Belum tersedia IR loader atau convolution cabinet.", 10, MUTED, false));
     }
 
     private void buildTunerPage() {
-        section("CHROMATIC GUITAR TUNER", "Deteksi pitch dari input mic/audio yang sedang berjalan. Hasil dipengaruhi noise dan kualitas input.");
-        LinearLayout tunerCard = card(GREEN);
-        root.addView(tunerCard);
-        tunerNote = text(tunerFrequency > 0 ? noteText(tunerFrequency) : "--\nMenunggu sinyal audio", 28, GREEN, true);
+        section("CHROMATIC GUITAR TUNER", "Tuner membaca input audio saat mesin audio berjalan.");
+        LinearLayout c = card(GREEN);
+        pageContainer.addView(c);
+        tunerNote = text(tunerFrequency > 0 ? noteText(tunerFrequency) : "--\nMenunggu sinyal audio",
+                28, GREEN, true);
         tunerNote.setGravity(Gravity.CENTER);
         tunerNote.setPadding(0, dp(28), 0, dp(28));
-        tunerCard.addView(tunerNote, new LinearLayout.LayoutParams(-1, dp(150)));
+        c.addView(tunerNote, new LinearLayout.LayoutParams(-1, dp(150)));
         Button start = new Button(this);
-        audioToggleButton = start;
-        styleButton(start, audioRunning ? "STOP AUDIO ENGINE" : "START MIC / USB AUDIO", GREEN);
-        tunerCard.addView(start, new LinearLayout.LayoutParams(-1, dp(48)));
+        styleButton(start, audioEngine.isRunning() ? "STOP AUDIO ENGINE" : "START AUDIO ENGINE", GREEN);
+        c.addView(start, new LinearLayout.LayoutParams(-1, dp(48)));
         start.setOnClickListener(v -> toggleAudio());
-        TextView advice = text("Untuk penyeteman yang lebih stabil: matikan efek, dekatkan sumber ke input, dan hindari suara speaker masuk kembali ke mikrofon.", 11, MUTED, false);
-        advice.setPadding(0, dp(12), 0, dp(4));
-        tunerCard.addView(advice);
-        audioStatus = text(audioMessage, 10, MUTED, false);
-        tunerCard.addView(audioStatus);
+        c.addView(text("Rentang deteksi: sekitar 50–1200 Hz. Akurasi dipengaruhi noise dan perangkat input.",
+                10, MUTED, false));
     }
 
     private void buildLooperPage() {
-        section("30-SECOND LOOPER", "Merekam sinyal yang sudah diproses dan memutarnya berulang. Belum mendukung overdub.");
+        section("30 SECOND LOOPER", "Rekam sinyal setelah efek dan amp/cab, lalu putar sebagai loop.");
         LinearLayout c = card(ORANGE);
-        root.addView(c);
-        loopStatus = text(looperText(), 16, ORANGE, true);
-        loopStatus.setPadding(0, dp(12), 0, dp(18));
+        pageContainer.addView(c);
+        loopStatus = text(looperText(), 16, TEXT, true);
+        loopStatus.setGravity(Gravity.CENTER);
+        loopStatus.setPadding(0, dp(20), 0, dp(20));
         c.addView(loopStatus);
-        Button record = new Button(this);
-        looperRecordButton = record;
-        styleButton(record, loopRecording ? "STOP RECORDING" : "RECORD LOOP", ORANGE);
-        c.addView(record, new LinearLayout.LayoutParams(-1, dp(48)));
-        record.setOnClickListener(v -> {
-            if (!audioRunning) {
-                Toast.makeText(this, "Jalankan audio engine terlebih dahulu.", Toast.LENGTH_LONG).show();
+        looperRecordButton = new Button(this);
+        styleButton(looperRecordButton, loopRecording ? "STOP RECORDING" : "RECORD LOOP", ORANGE);
+        c.addView(looperRecordButton, new LinearLayout.LayoutParams(-1, dp(48)));
+        looperRecordButton.setOnClickListener(v -> {
+            if (!audioEngine.isRunning()) {
+                Toast.makeText(this, "Mulai audio engine terlebih dahulu.", Toast.LENGTH_SHORT).show();
                 return;
             }
-            if (!loopRecording) {
-                loopPlaying = false;
-                loopLength = 0;
-                loopWritePos = 0;
-                loopRecording = true;
-                Toast.makeText(this, "Recording loop dimulai", Toast.LENGTH_SHORT).show();
-            } else {
-                loopRecording = false;
-                loopLength = loopWritePos;
-                loopReadPos = 0;
-                Toast.makeText(this, "Loop disimpan: " + String.format(Locale.US, "%.1f", loopLength / (float) SAMPLE_RATE) + " detik", Toast.LENGTH_SHORT).show();
-            }
+            if (loopRecording) audioEngine.stopLoopRecording();
+            else audioEngine.startLoopRecording();
             refreshLooperUi();
         });
-        Button play = new Button(this);
-        looperPlayButton = play;
-        styleButton(play, loopPlaying ? "STOP LOOP" : "PLAY LOOP", CYAN);
-        c.addView(play, new LinearLayout.LayoutParams(-1, dp(48)));
-        play.setOnClickListener(v -> {
-            if (loopPlaying) {
-                loopPlaying = false;
-            } else if (loopLength > 0 && audioRunning) {
-                loopReadPos = 0;
-                loopPlaying = true;
-            } else {
-                Toast.makeText(this, "Rekam loop dan jalankan audio terlebih dahulu.", Toast.LENGTH_LONG).show();
-            }
+        looperPlayButton = new Button(this);
+        styleButton(looperPlayButton, loopPlaying ? "STOP LOOP" : "PLAY LOOP", CYAN);
+        c.addView(looperPlayButton, new LinearLayout.LayoutParams(-1, dp(48)));
+        looperPlayButton.setOnClickListener(v -> {
+            audioEngine.toggleLoopPlayback();
             refreshLooperUi();
         });
         Button clear = new Button(this);
         styleButton(clear, "CLEAR LOOP", RED);
         c.addView(clear, new LinearLayout.LayoutParams(-1, dp(48)));
         clear.setOnClickListener(v -> {
-            loopRecording = false;
-            loopPlaying = false;
-            loopLength = 0;
-            loopWritePos = 0;
-            loopReadPos = 0;
-            refreshLooperUi();
+            new AlertDialog.Builder(this).setTitle("Hapus loop?")
+                    .setMessage("Rekaman loop yang tersimpan akan dihapus.")
+                    .setNegativeButton("BATAL", null)
+                    .setPositiveButton("HAPUS", (d, w) -> {
+                        audioEngine.clearLoop();
+                        refreshLooperUi();
+                    }).show();
         });
-        Button startAudio = new Button(this);
-        looperAudioButton = startAudio;
-        audioToggleButton = startAudio;
-        styleButton(startAudio, audioRunning ? "STOP AUDIO ENGINE" : "START AUDIO ENGINE", BLUE);
-        c.addView(startAudio, new LinearLayout.LayoutParams(-1, dp(48)));
-        startAudio.setOnClickListener(v -> toggleAudio());
-        audioStatus = text(audioMessage, 10, MUTED, false);
-        audioStatus.setPadding(0, dp(10), 0, 0);
-        c.addView(audioStatus);
+        Button audio = new Button(this);
+        styleButton(audio, audioEngine.isRunning() ? "STOP AUDIO ENGINE" : "START AUDIO ENGINE", BLUE);
+        c.addView(audio, new LinearLayout.LayoutParams(-1, dp(48)));
+        audio.setOnClickListener(v -> toggleAudio());
     }
 
     private void buildPresetsPage() {
-        section("PRESET LIBRARY", "60 preset dasar. Memilih preset mengubah state efek dan amp; hasil suara tetap bergantung pada input/output perangkat.");
+        section("PRESET LIBRARY", "60 preset bawaan. Simpan perubahan dengan SAVE atau buat variasi dengan SAVE AS.");
         LinearLayout c = card(BLUE);
-        root.addView(c);
-        presetTitle = text("ACTIVE  •  " + getPresetName(selectedPreset), 16, CYAN, true);
+        pageContainer.addView(c);
+        presetTitle = text("ACTIVE  •  " + getPresetName(selectedPreset), 16, TEXT, true);
         c.addView(presetTitle);
         presetSpinner = spinner(getAllPresetNames());
         presetSpinner.setSelection(selectedPreset);
-        c.addView(presetSpinner, new LinearLayout.LayoutParams(-1, dp(50)));
+        c.addView(presetSpinner, new LinearLayout.LayoutParams(-1, dp(48)));
         presetSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            private boolean first = true;
-            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+            boolean first = true;
+            @Override public void onItemSelected(AdapterView<?> p, View v, int position, long id) {
                 if (first) { first = false; return; }
-                applyPresetValues(position);
-                updatePresetLabels();
+                applyPresetValues(position, true);
             }
-            @Override public void onNothingSelected(AdapterView<?> parent) {}
+            @Override public void onNothingSelected(AdapterView<?> p) {}
         });
+        Button save = new Button(this);
+        styleButton(save, "SAVE • OVERWRITE SELECTED PRESET", GREEN);
+        c.addView(save, new LinearLayout.LayoutParams(-1, dp(48)));
+        save.setOnClickListener(v -> {
+            savePresetProfile(selectedPreset);
+            Toast.makeText(this, "Preset disimpan: " + getPresetName(selectedPreset), Toast.LENGTH_SHORT).show();
+        });
+        Button saveAs = new Button(this);
+        styleButton(saveAs, "SAVE AS • CREATE NEW PRESET", CYAN);
+        c.addView(saveAs, new LinearLayout.LayoutParams(-1, dp(48)));
+        saveAs.setOnClickListener(v -> showSaveAsDialog());
         Button load = new Button(this);
-        styleButton(load, "LOAD SELECTED PRESET", BLUE);
+        styleButton(load, "RELOAD SELECTED PRESET", PURPLE);
         c.addView(load, new LinearLayout.LayoutParams(-1, dp(48)));
         load.setOnClickListener(v -> {
-            applyPresetValues(presetSpinner.getSelectedItemPosition());
-            updatePresetLabels();
-            Toast.makeText(this, "Preset diterapkan: " + getPresetName(selectedPreset), Toast.LENGTH_SHORT).show();
-        });        
-        Button save = new Button(this);
-        styleButton(save, "SAVE • OVERWRITE PRESET", GREEN);
-        c.addView(save, new LinearLayout.LayoutParams(-1, dp(48)));
-
-        save.setOnClickListener(v -> {
-        savePresetProfile(selectedPreset);
-        Toast.makeText(this,
-            "Preset berhasil disimpan: " + getPresetName(selectedPreset),
-            Toast.LENGTH_SHORT).show();
-        });       
-        Button saveAs = new Button(this);
-        styleButton(saveAs, "SAVE AS • NEW PRESET", PURPLE);
-        c.addView(saveAs, new LinearLayout.LayoutParams(-1, dp(48)));
-
-        saveAs.setOnClickListener(v -> showSaveAsDialog());
-        TextView info = text("Preset dapat kamu ubah lagi dari halaman Pedalboard dan Amp/Cab. Perubahan belum disimpan sebagai preset pengguna setelah aplikasi ditutup.", 10, MUTED, false);
-        info.setPadding(0, dp(12), 0, dp(4));
-        c.addView(info);
-        LinearLayout bank = card(PURPLE);
-        root.addView(bank);
-        sectionIn(bank, "PRESET BANKS", "Gunakan tombol di bawah untuk berpindah cepat antar kelompok.");
-        for (int start = 0; start < presetNames.length; start += 10) {
-            final int bankStart = start;
-            Button b = new Button(this);
-            styleButton(b, String.format(Locale.US, "%02d–%02d  •  %s", start + 1, Math.min(start + 10, presetNames.length), presetNames[start]), PURPLE);
-            bank.addView(b, new LinearLayout.LayoutParams(-1, dp(44)));
-            b.setOnClickListener(v -> {
-                int target = bankStart;
-                applyPresetValues(target);
-                if (presetSpinner != null) presetSpinner.setSelection(target);
-                updatePresetLabels();
-            });
-        }
+            if (!loadPresetProfile(selectedPreset)) applyPresetValues(selectedPreset, false);
+            refreshAllUi();
+        });
+        c.addView(text("Preset kustom disimpan secara lokal di penyimpanan aplikasi.", 10, MUTED, false));
     }
 
     private void buildAudioPage() {
-        section("AUDIO INPUT / OUTPUT", "Audio engine memakai AudioRecord dan AudioTrack pada 44,1 kHz mono. Pilihan USB meminta routing bila Android/perangkat mendukungnya.");
-        LinearLayout c = card(CYAN);
-        root.addView(c);
+        section("AUDIO INPUT / OUTPUT", "Pilih perangkat sebelum menjalankan mesin audio. USB memerlukan perangkat yang dikenali Android.");
+        LinearLayout c = card(RED);
+        pageContainer.addView(c);
         c.addView(text("INPUT DEVICE", 11, MUTED, true));
         inputSpinner = spinner(inputNames);
         inputSpinner.setSelection(indexOf(inputNames, selectedInput));
         c.addView(inputSpinner, new LinearLayout.LayoutParams(-1, dp(48)));
         inputSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+            boolean first = true;
+            @Override public void onItemSelected(AdapterView<?> p, View v, int position, long id) {
+                if (first) { first = false; return; }
                 selectedInput = inputNames[position];
-                if (audioRunning) setAudioMessage("Input berubah. Stop lalu start audio untuk menerapkan routing: " + selectedInput);
+                pushSettings();
             }
-            @Override public void onNothingSelected(AdapterView<?> parent) {}
+            @Override public void onNothingSelected(AdapterView<?> p) {}
         });
         c.addView(text("OUTPUT DEVICE", 11, MUTED, true));
         outputSpinner = spinner(outputNames);
         outputSpinner.setSelection(indexOf(outputNames, selectedOutput));
         c.addView(outputSpinner, new LinearLayout.LayoutParams(-1, dp(48)));
         outputSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+            boolean first = true;
+            @Override public void onItemSelected(AdapterView<?> p, View v, int position, long id) {
+                if (first) { first = false; return; }
                 selectedOutput = outputNames[position];
-                if (audioRunning) setAudioMessage("Output berubah. Stop lalu start audio untuk menerapkan routing: " + selectedOutput);
+                pushSettings();
             }
-            @Override public void onNothingSelected(AdapterView<?> parent) {}
+            @Override public void onNothingSelected(AdapterView<?> p) {}
         });
         addAudioToggle(c);
         audioStatus = text(audioMessage, 11, MUTED, false);
-        audioStatus.setPadding(0, dp(8), 0, dp(8));
+        audioStatus.setPadding(0, dp(8), 0, dp(4));
         c.addView(audioStatus);
-        usbStatus = text("USB AUDIO: memeriksa perangkat...", 11, CYAN, true);
-        usbStatus.setPadding(0, dp(8), 0, dp(8));
-        c.addView(usbStatus);
-        TextView limitations = text("Perhatian: Android menentukan ketersediaan perangkat audio eksternal. Jika USB tidak terdeteksi atau tidak dapat di-route oleh sistem, aplikasi tidak bisa memaksakan input/output tersebut. Bluetooth audio umumnya memiliki latensi yang kurang cocok untuk monitoring gitar real-time.", 10, MUTED, false);
-        limitations.setPadding(0, dp(10), 0, dp(5));
-        c.addView(limitations);
-        if (usbAudioDetector != null) {
-            usbAudioDetector.start();
-        }
+        c.addView(text("Catatan: dukungan USB audio bergantung pada interface, kabel OTG, Android, dan routing perangkat.", 10, MUTED, false));
     }
 
     private void addAudioToggle(LinearLayout parent) {
-        Button b = new Button(this);
-        audioToggleButton = b;
-        styleButton(b, audioRunning ? "STOP AUDIO ENGINE" : "START MIC / USB AUDIO", audioRunning ? RED : GREEN);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(50));
-        lp.setMargins(0, dp(7), 0, dp(3));
-        parent.addView(b, lp);
-        b.setOnClickListener(v -> toggleAudio());
-    }
-
-    private void addControl(LinearLayout parent, String label, int min, int max, int initial,
-                            int accent, IntChanged changed) {
-        LinearLayout line = new LinearLayout(this);
-        line.setOrientation(LinearLayout.VERTICAL);
-        line.setPadding(0, dp(5), 0, dp(3));
-        parent.addView(line);
-        TextView value = text(label + "  " + initial, 11, TEXT, true);
-        line.addView(value);
-        SeekBar seek = new SeekBar(this);
-        seek.setMax(max - min);
-        seek.setProgress(initial - min);
-        tintSeek(seek, accent);
-        line.addView(seek);
-        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
-                int result = progress + min;
-                value.setText(label + "  " + result);
-                changed.onChanged(result);
-            }
-            @Override public void onStartTrackingTouch(SeekBar bar) {}
-            @Override public void onStopTrackingTouch(SeekBar bar) {}
-        });
-    }
-
-    private interface IntChanged { void onChanged(int value); }
-    private interface ToggleChanged { void onChanged(boolean value); }
-
-    private void addToggleRow(LinearLayout parent, String label, 
-                              boolean initial,
-                              ToggleChanged changed, int accent) {
-        LinearLayout r = row();
-        parent.addView(r);
-        TextView name = text(label, 12, TEXT, true);
-        r.addView(name, new LinearLayout.LayoutParams(0, dp(44), 1));
-        Button b = new Button(this);
-        styleButton(b, initial ? "ON" : "OFF", accent);
-        r.addView(b, new LinearLayout.LayoutParams(dp(80), dp(42)));
-        b.setOnClickListener(v -> {
-            boolean next = !initial;
-            // initial is captured; maintain state with the button's current label instead.
-            next = !"ON".equals(b.getText().toString());
-            b.setText(next ? "ON" : "OFF");
-            b.setBackground(bgShape(next ? accent : Color.DKGRAY, accent));
-            changed.onChanged(next);
-        });
-        changed.onChanged(initial);
+        audioToggleButton = new Button(this);
+        styleButton(audioToggleButton, audioEngine.isRunning() ? "STOP AUDIO ENGINE" : "START MIC / USB AUDIO",
+                audioEngine.isRunning() ? RED : GREEN);
+        parent.addView(audioToggleButton, new LinearLayout.LayoutParams(-1, dp(50)));
+        audioToggleButton.setOnClickListener(v -> toggleAudio());
     }
 
     private void toggleAudio() {
-        if (audioRunning) {
-            audioRunning = false;
-            audioStopping = true;
-            setAudioMessage("Status: menghentikan audio...");
-            return;
-        }
-        if (audioThread != null && audioThread.isAlive()) {
-            setAudioMessage("Audio masih berhenti. Tunggu sebentar lalu coba lagi.");
-            return;
-        }
-        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+        if (audioEngine.isRunning()) {
+            audioEngine.stop();
+        } else if (Build.VERSION.SDK_INT >= 23
+                && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_AUDIO);
-            return;
+        } else {
+            pushSettings();
+            audioEngine.start();
         }
-        audioRunning = true;
-        audioStopping = false;
-        setAudioMessage("Status: memulai audio • " + selectedInput + " → " + selectedOutput);
-        audioThread = new Thread(this::runAudio, "StradaAudioEngine");
-        audioThread.start();
+        refreshAudioButtons();
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
         if (requestCode == REQUEST_AUDIO) {
-            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) toggleAudio();
-            else Toast.makeText(this, "Izin mikrofon diperlukan untuk memproses sinyal gitar.", Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private void runAudio() {
-        AudioRecord recorder = null;
-        AudioTrack track = null;
-        String failure = null;
-        try {
-            int inMin = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
-            int outMin = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
-            if (inMin <= 0 || outMin <= 0) throw new IllegalStateException("Format audio 44.1 kHz tidak didukung perangkat");
-            int bufferBytes = Math.max(Math.max(inMin, outMin), FRAMES_PER_READ * 8);
-            recorder = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE,
-                    AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferBytes);
-            track = new AudioTrack(AudioManager.STREAM_MUSIC, SAMPLE_RATE,
-                    AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT,
-                    bufferBytes, AudioTrack.MODE_STREAM);
-            if (recorder.getState() != AudioRecord.STATE_INITIALIZED || track.getState() != AudioTrack.STATE_INITIALIZED)
-                throw new IllegalStateException("AudioRecord/AudioTrack gagal diinisialisasi");
-            requestPreferredDevices(recorder, track);
-
-            short[] in = new short[FRAMES_PER_READ];
-            short[] out = new short[FRAMES_PER_READ];
-            float[] delayBuf = new float[SAMPLE_RATE];
-            float[] reverbBuf = new float[SAMPLE_RATE / 4];
-            float[] modBuf = new float[SAMPLE_RATE / 8];
-            int delayWrite = 0, reverbWrite = 0, modWrite = 0;
-            float gateEnvelope = 0f, compEnvelope = 0f;
-            float ampLow = 0f, ampMid = 0f, cabLow = 0f;
-            float odToneState = 0f, distToneState = 0f, distPlusToneState = 0f;
-            double modPhase = 0.0;
-            PitchTracker pitchTracker = new PitchTracker();
-            track.play();
-            recorder.startRecording();
-            setAudioMessage("Status: AUDIO RUNNING • gunakan headphone untuk mengurangi feedback");
-            boolean routeReported = false;
-      
-            while (audioRunning) {
-                int count = recorder.read(in, 0, in.length);
-                if (count == AudioRecord.ERROR_INVALID_OPERATION || count == AudioRecord.ERROR_BAD_VALUE || count < 0)
-                    throw new IllegalStateException("Mic read gagal: " + count);
-                if (count == 0) continue;
-
-                boolean[] on = new boolean[EFFECT_COUNT];
-                int[][] p = new int[EFFECT_COUNT][PARAMS_PER_EFFECT];
-                for (int e = 0; e < EFFECT_COUNT; e++) {
-                    on[e] = effectEnabled.get(e) != 0;
-                    for (int j = 0; j < PARAMS_PER_EFFECT; j++) p[e][j] = effectParams.get(e * PARAMS_PER_EFFECT + j);
-                }
-                float localMaster = masterVolume;
-                float localAmpGain = ampGain;
-                float localAmpVolume = ampVolume;
-                float localBass = ampBass;
-                float localMiddle = ampMiddle;
-                float localTreble = ampTreble;
-                int localAmpModel = selectedAmp;
-                int localCabModel = selectedCab;
-                boolean localAmpOn = ampOn;
-                boolean localCabOn = cabOn;
-                int delaySamples = clamp((int) ((0.03f + 0.0047f * p[6][0]) * SAMPLE_RATE), 1, delayBuf.length - 1);
-                float delayFeedback = p[6][1] / 125f;
-                float delayMix = p[6][2] / 100f;
-                float reverbFeedback = 0.28f + p[7][0] / 180f;
-                float reverbMix = p[7][2] / 100f;
-                float modRate = 0.15f + (p[5][0] / 100f) * 5.0f;
-                float modDepth = p[5][1] / 100f;
-                float modMix = p[5][2] / 100f;
-
-                for (int i = 0; i < count; i++) {
-                    float x = in[i] / 32768f;
-
-                    if (on[0]) {
-                        float abs = Math.abs(x);
-                        float attack = abs > gateEnvelope ? 0.25f : (0.003f + p[0][1] / 100f * 0.08f);
-                        gateEnvelope += attack * (abs - gateEnvelope);
-                        float threshold = 0.002f + p[0][0] / 100f * 0.095f;
-                        if (gateEnvelope < threshold) x *= 0.025f;
-                    }
-                    if (on[1]) {
-                        float abs = Math.abs(x);
-                        compEnvelope += (abs > compEnvelope ? 0.18f : 0.012f) * (abs - compEnvelope);
-                        float threshold = 0.38f - p[1][0] / 100f * 0.27f;
-                        if (compEnvelope > threshold && compEnvelope > 0.0001f) {
-                            float ratio = 1f + p[1][0] / 18f;
-                            float target = (threshold + (compEnvelope - threshold) / ratio) / compEnvelope;
-                            x *= target;
-                        }
-                        x *= 0.65f + p[1][1] / 100f * 0.7f;
-                    }
-                    if (on[2]) {
-                        float drive = 1f + p[2][0] / 7.0f;
-                        float shaped = (float) Math.tanh(x * drive);
-                        float toneAlpha = 0.015f + p[2][1] / 100f * 0.22f;
-                        odToneState += toneAlpha * (shaped - odToneState);
-                        shaped = odToneState * (1f - p[2][1] / 150f) + shaped * (p[2][1] / 150f);
-                        x = shaped * (0.5f + p[2][2] / 100f * 0.9f);
-                    }
-                    if (on[3]) {
-                        float shaped = (float) Math.tanh(x * (1f + p[3][0] / 4.0f));
-                        float toneAlpha = 0.015f + p[3][1] / 100f * 0.25f;
-                        distToneState += toneAlpha * (shaped - distToneState);
-                        shaped = distToneState * (1f - p[3][1] / 160f) + shaped * (p[3][1] / 160f);
-                        x = shaped * (0.45f + p[3][2] / 100f * 0.95f);
-                    }
-                    if (on[4]) {
-                        float shaped = (float) Math.tanh(x * (1.5f + p[4][0] / 3.2f));
-                        float toneAlpha = 0.01f + p[4][1] / 100f * 0.28f;
-                        distPlusToneState += toneAlpha * (shaped - distPlusToneState);
-                        shaped = distPlusToneState * (1f - p[4][1] / 170f) + shaped * (p[4][1] / 170f);
-                        x = shaped * (0.4f + p[4][2] / 100f * 0.9f);
-                    }
-                    if (on[5]) {
-                        modBuf[modWrite] = x;
-                        int modulation = (int) ((Math.sin(modPhase) * 0.5 + 0.5) * modDepth * SAMPLE_RATE * 0.018);
-                        int modDelay = clamp((int) (SAMPLE_RATE * 0.008) + modulation, 1, modBuf.length - 2);
-                        int read = modWrite - modDelay;
-                        if (read < 0) read += modBuf.length;
-                        float wet = modBuf[read];
-                        x = x * (1f - modMix * 0.55f) + wet * (modMix * 0.75f);
-                        modWrite = (modWrite + 1) % modBuf.length;
-                        modPhase += (2.0 * Math.PI * modRate) / SAMPLE_RATE;
-                        if (modPhase > Math.PI * 2) modPhase -= Math.PI * 2;
-                    }
-                    if (on[6]) {
-                        int read = delayWrite - delaySamples;
-                        if (read < 0) read += delayBuf.length;
-                        float echo = delayBuf[read];
-                        delayBuf[delayWrite] = x + echo * Math.min(0.82f, delayFeedback);
-                        x = x * (1f - delayMix * 0.75f) + echo * (delayMix * 0.85f);
-                        delayWrite = (delayWrite + 1) % delayBuf.length;
-                    } else {
-                        delayBuf[delayWrite] = x;
-                        delayWrite = (delayWrite + 1) % delayBuf.length;
-                    }
-                    if (on[7]) {
-                        float rv = reverbBuf[reverbWrite];
-                        reverbBuf[reverbWrite] = x + rv * Math.min(0.86f, reverbFeedback);
-                        float tone = p[7][1] / 100f;
-                        float filteredRv = rv * (0.75f + tone * 0.25f);
-                        x = x * (1f - reverbMix * 0.7f) + filteredRv * reverbMix;
-                        reverbWrite = (reverbWrite + 1) % reverbBuf.length;
-                    } else {
-                        reverbBuf[reverbWrite] = x;
-                        reverbWrite = (reverbWrite + 1) % reverbBuf.length;
-                    }
-
-                    if (localAmpOn) {
-                        float driven = (float) Math.tanh(x * localAmpGain * ampDriveScale(localAmpModel));
-                        ampLow += 0.035f * (driven - ampLow);
-                        ampMid += 0.16f * (driven - ampMid);
-                        float lowBand = ampLow;
-                        float midBand = ampMid - ampLow;
-                        float highBand = driven - ampMid;
-                        x = lowBand * (0.35f + localBass * 1.15f)
-                                + midBand * (0.35f + localMiddle * 1.15f)
-                                + highBand * (0.25f + localTreble * 1.35f);
-                        x *= (0.55f + localAmpVolume * 0.7f) * ampOutputScale(localAmpModel);
-                    }
-                    if (localCabOn) {
-                        float cabCutoff = cabCutoff(localCabModel);
-                        cabLow += cabCutoff * (x - cabLow);
-                        x = cabLow * 0.88f + x * 0.12f;
-                    }
-
-                    // Looper records the processed signal and mixes playback into output.
-                    float processed = x;
-                    if (loopRecording && loopWritePos < loopBuffer.length) {
-                        loopBuffer[loopWritePos++] = (short) (clampFloat(processed, -0.95f, 0.95f) * 32767f);
-                        if (loopWritePos >= loopBuffer.length) {
-                            loopRecording = false;
-                            loopLength = loopWritePos;
-                        }
-                    }
-                    if (loopPlaying && loopLength > 0) {
-                        int rp = loopReadPos;
-                        if (rp >= loopLength) rp = 0;
-                        processed = processed * 0.75f + (loopBuffer[rp] / 32768f) * 0.75f;
-                        loopReadPos = (rp + 1) % loopLength;
-                    }
-                    processed *= localMaster;
-                    processed = clampFloat(processed, -0.95f, 0.95f);
-                    out[i] = (short) (processed * 32767f);
-                }
-
-                
-                int written = track.write(out, 0, count);
-                if (written < 0) throw new IllegalStateException("AudioTrack write gagal: " + written);
-
-                // Periksa perangkat audio yang benar-benar digunakan Android.
-                if (!routeReported && Build.VERSION.SDK_INT >= 24) {
-                AudioDeviceInfo activeInput = recorder.getRoutedDevice();
-                AudioDeviceInfo activeOutput = track.getRoutedDevice();
-
-               if (activeInput != null && activeOutput != null) {
-               setAudioMessage(
-                "AUDIO RUNNING\n"
-                + "Input aktif: " + activeInput.getProductName()
-                + "\nOutput aktif: " + activeOutput.getProductName()
-        );
-        routeReported = true;
-    }
-}
-
-pitchTracker.add(in, count, this);
-                
-        } catch (Exception e) {
-            failure = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-        } finally {
-            if (recorder != null) {
-                try { if (recorder.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) recorder.stop(); } catch (Exception ignored) {}
-                try { recorder.release(); } catch (Exception ignored) {}
-            }
-            if (track != null) {
-                try { if (track.getPlayState() == AudioTrack.PLAYSTATE_PLAYING) track.stop(); } catch (Exception ignored) {}
-                try { track.release(); } catch (Exception ignored) {}
-            }
-            audioRunning = false;
-            audioStopping = false;
-            if (loopRecording) { loopRecording = false; loopLength = loopWritePos; }
-            loopPlaying = false;
-            final String error = failure;
-            if (error != null && !error.isEmpty()) setAudioMessage("Audio error: " + error);
-            else setAudioMessage("Status: audio stopped");
-            runOnUiThread(() -> {
-                if (currentPage.equals("LOOPER")) refreshLooperUi();
-                if (currentPage.equals("TUNER") && tunerNote != null && tunerFrequency <= 0f)
-                    tunerNote.setText("--\nAudio berhenti");
-                if (currentPage.equals("HOME") || currentPage.equals("AUDIO")) showPage(currentPage);
-                setupNavigation();
-            });
-            audioThread = null;
-        }
-    }
-    
-    private void requestPreferredDevices(AudioRecord recorder, AudioTrack track) {
-    if (Build.VERSION.SDK_INT < 23) {
-        setAudioMessage("Pemilihan perangkat manual membutuhkan Android 6.0 atau lebih baru.");
-        return;
-    }
-
-    StringBuilder report = new StringBuilder();
-    AudioDeviceInfo chosenInput = null;
-    AudioDeviceInfo chosenOutput = null;
-
-    try {
-        // PILIH INPUT
-        AudioDeviceInfo[] inputs =
-                getAudioDevices(AudioManager.GET_DEVICES_INPUTS);
-
-        for (AudioDeviceInfo d : inputs) {
-            if (!d.isSource()) continue;
-
-            int type = d.getType();
-
-            if ("Microphone (HP)".equals(selectedInput)
-                    && type == AudioDeviceInfo.TYPE_BUILTIN_MIC) {
-                chosenInput = d;
-                break;
-            }
-
-            if ("USB Audio Interface".equals(selectedInput)) {
-                boolean usb = type == AudioDeviceInfo.TYPE_USB_DEVICE
-                        || (Build.VERSION.SDK_INT >= 26
-                        && type == AudioDeviceInfo.TYPE_USB_HEADSET);
-
-                if (usb) {
-                    chosenInput = d;
-                    break;
-                }
-            }
-
-            if ("Wired Headset Mic".equals(selectedInput)
-                    && type == AudioDeviceInfo.TYPE_WIRED_HEADSET) {
-                chosenInput = d;
-                break;
-            }
-        }
-
-        if (chosenInput != null) {
-            boolean routed = recorder.setPreferredDevice(chosenInput);
-            report.append("Input: ")
-                    .append(chosenInput.getProductName())
-                    .append(routed ? " • berhasil dipilih" : " • routing ditolak")
-                    .append("\n");
-        } else {
-            report.append("Input: perangkat ")
-                    .append(selectedInput)
-                    .append(" tidak ditemukan.\n");
-        }
-
-        // PILIH OUTPUT
-        if ("System / Headphone".equals(selectedOutput)) {
-            report.append("Output: mengikuti routing sistem Android.\n");
-        } else {
-            AudioDeviceInfo[] outputs =
-                    getAudioDevices(AudioManager.GET_DEVICES_OUTPUTS);
-
-            for (AudioDeviceInfo d : outputs) {
-                if (!d.isSink()) continue;
-
-                int type = d.getType();
-
-                if ("Speaker".equals(selectedOutput)
-                        && type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
-                    chosenOutput = d;
-                    break;
-                }
-
-                if ("USB Audio Output".equals(selectedOutput)) {
-                    boolean usb = type == AudioDeviceInfo.TYPE_USB_DEVICE
-                            || (Build.VERSION.SDK_INT >= 26
-                            && type == AudioDeviceInfo.TYPE_USB_HEADSET);
-
-                    if (usb) {
-                        chosenOutput = d;
-                        break;
-                    }
-                }
-            }
-
-            if (chosenOutput != null) {
-                boolean routed = track.setPreferredDevice(chosenOutput);
-                report.append("Output: ")
-                        .append(chosenOutput.getProductName())
-                        .append(routed ? " • berhasil dipilih" : " • routing ditolak")
-                        .append("\n");
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+                pushSettings();
+                audioEngine.start();
             } else {
-                report.append("Output: perangkat ")
-                        .append(selectedOutput)
-                        .append(" tidak ditemukan.\n");
-            }
-        }
-
-        setAudioMessage(report.toString());
-
-    } catch (Exception e) {
-        setAudioMessage("Kesalahan routing audio: " + e.getMessage());
-    }
-}
-
-
-    private AudioDeviceInfo[] getAudioDevices(int direction) {
-        if (Build.VERSION.SDK_INT >= 23) {
-            AudioManager manager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-            if (manager != null) return manager.getDevices(direction);
-        }
-        return new AudioDeviceInfo[0];
-    }
-
-    private class PitchTracker {
-        private final float[] window = new float[2048];
-        private int writePosition = 0;
-        private int filled = 0;
-        private int sinceCheck = 0;
-
-        void add(short[] samples, int count, MainActivity activity) {
-            for (int i = 0; i < count; i++) {
-                window[writePosition] = samples[i] / 32768f;
-                writePosition = (writePosition + 1) % window.length;
-                if (filled < window.length) filled++;
-                sinceCheck++;
-            }
-            if (filled < window.length || sinceCheck < 1024) return;
-            sinceCheck = 0;
-            float[] ordered = new float[window.length];
-            for (int i = 0; i < window.length; i++) ordered[i] = window[(writePosition + i) % window.length];
-            float mean = 0f;
-            for (float v : ordered) mean += v;
-            mean /= ordered.length;
-            for (int i = 0; i < ordered.length; i++) ordered[i] -= mean;
-            float bestScore = 0f;
-            int bestLag = -1;
-            int minLag = SAMPLE_RATE / 1200;
-            int maxLag = SAMPLE_RATE / 55;
-            for (int lag = minLag; lag <= maxLag; lag++) {
-                double corr = 0, energyA = 0, energyB = 0;
-                int end = ordered.length - lag;
-                for (int j = 0; j < end; j += 2) {
-                    float a = ordered[j];
-                    float b = ordered[j + lag];
-                    corr += a * b;
-                    energyA += a * a;
-                    energyB += b * b;
-                }
-                if (energyA > 1e-7 && energyB > 1e-7) {
-                    float score = (float) (corr / Math.sqrt(energyA * energyB));
-9⁶                    if (score > bestScore) { bestScore = score; bestLag = lag; }
-                }
-            }dari ⁹
-            if (bestLag > 0 && bestScore > 0.48f) {
-                final float frequency = SAMPLE_RATE / (float) bestLag;
-                if (frequency >= 50f && frequency <= 1200f) {
-                    tunerFrequency = frequency;
-                    runOnUiThread(() -> {
-                        if (tunerNote != null) tunerNote.setText(noteText(frequency));
-                    });
-                }catch di atas langit berubah 
+                Toast.makeText(this, "Izin mikrofon diperlukan untuk memproses gitar.", Toast.LENGTH_LONG).show();
             }
         }
     }
 
-    private String noteText(float frequency) {
-        if (frequency <= 0f) return "--\nMenunggu sinyal";
-        String[] names = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-        int midi = (int) Math.round(69 + 12 * (Math.log(frequency / 440.0) / Math.log(2)));
-        int noteIndex = (midi % 12 + 12) % 12;
-        int octave = midi / 12 - 1;
-        double target = 440.0 * Math.pow(2.0, (midi - 69) / 12.0);
-        int cents = (int) Math.round(1200.0 * Math.log(frequency / target) / Math.log(2));
-        return names[noteIndex] + octave + "\n" + String.format(Locale.US, "%.1f Hz  •  %+d cents", frequency, cents);
+    private void pushSettings() {
+        if (audioEngine == null) return;
+        AudioEngine.Settings s = new AudioEngine.Settings();
+        for (int i = 0; i < EFFECT_COUNT; i++) {
+            s.enabled[i] = effectEnabled[i];
+            for (int j = 0; j < 3; j++) s.params[i][j] = effectParams[i][j];
+        }
+        s.master = masterVolume;
+        s.gain = ampGain;
+        s.bass = ampBass;
+        s.middle = ampMiddle;
+        s.treble = ampTreble;
+        s.ampVolume = ampVolume;
+        s.ampOn = ampOn;
+        s.cabOn = cabOn;
+        s.ampModel = selectedAmp;
+        s.cabModel = selectedCab;
+        s.input = selectedInput;
+        s.output = selectedOutput;
+        audioEngine.updateSettings(s);
     }
 
-    private void applyPresetValues(int index) {
+    private void applyPresetValues(int index, boolean refresh) {
         selectedPreset = clamp(index, 0, getAllPresetNames().length - 1);
+        if (loadPresetProfile(selectedPreset)) {
+            if (refresh) refreshAllUi();
+            pushSettings();
+            return;
+        }
         for (int i = 0; i < EFFECT_COUNT; i++) {
             boolean on;
             if (selectedPreset < 6) on = (i == 0 || i == 1 || i == 5) && ((selectedPreset + i) % 3 != 0);
@@ -1117,225 +563,150 @@ pitchTracker.add(in, count, this);
             else if (selectedPreset < 34) on = i == 0 || i == 3 || i == 4 || (i == 1 && selectedPreset % 2 == 0);
             else if (selectedPreset < 45) on = i == 5 || i == 6 || i == 7 || (i == 2 && selectedPreset % 2 == 0);
             else on = ((selectedPreset + i * 2) % 5) < 2;
-            setEffectOn(i, on);
-            for (int j = 0; j < paramNames[i].length; j++) {
-                int value = 25 + ((selectedPreset * 13 + i * 17 + j * 29) % 70);
-                setParam(i, j, value);
+            effectEnabled[i] = on;
+            for (int j = 0; j < 3; j++) {
+                effectParams[i][j] = 25 + ((selectedPreset * 13 + i * 17 + j * 29) % 70);
             }
         }
-        ampGain = 1.5f + (selectedPreset % 10) * 0.35f;
-        ampVolume = 0.58f + (selectedPreset % 5) * 0.08f;
-        ampBass = 0.35f + (selectedPreset % 4) * 0.12f;
-        ampMiddle = 0.38f + ((selectedPreset + 1) % 4) * 0.12f;
-        ampTreble = 0.35f + ((selectedPreset + 2) % 5) * 0.12f;
+        ampGain = 1.5f + (selectedPreset % 10) * .35f;
+        ampVolume = .58f + (selectedPreset % 5) * .08f;
+        ampBass = .35f + (selectedPreset % 4) * .12f;
+        ampMiddle = .38f + ((selectedPreset + 1) % 4) * .12f;
+        ampTreble = .35f + ((selectedPreset + 2) % 5) * .12f;
         selectedAmp = selectedPreset % ampNames.length;
         selectedCab = (selectedPreset + 5) % cabNames.length;
-        masterVolume = 0.55f + (selectedPreset % 5) * 0.08f;
-        // Default ON untuk preset bawaan.
+        masterVolume = .55f + (selectedPreset % 5) * .08f;
         ampOn = true;
         cabOn = true;
-        if (loadPresetProfile(selectedPreset)) {
-            updatePresetLabels();
-            refreshEffectControlUi();
-            return;
-        }
-        if (masterSeek != null) masterSeek.setProgress(Math.round(masterVolume * 100));
-        updateMasterValue(Math.round(masterVolume * 100));
+        pushSettings();
+        if (refresh) refreshAllUi();
+    }
+
+    private void refreshAllUi() {
         updatePresetLabels();
         refreshEffectControlUi();
+        refreshLooperUi();
+        refreshAudioButtons();
+        if (ampSpinner != null) ampSpinner.setSelection(selectedAmp);
+        if (cabSpinner != null) cabSpinner.setSelection(selectedCab);
+        if (masterSeek != null) masterSeek.setProgress(Math.round(masterVolume * 100));
+        updateMasterValue(Math.round(masterVolume * 100));
     }
 
     private void showSaveAsDialog() {
-    EditText nameInput = new EditText(this);
-    nameInput.setSingleLine(true);
-    nameInput.setHint("Nama preset baru");
-    nameInput.setInputType(
-            InputType.TYPE_CLASS_TEXT |
-            InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-    );
-
-    new AlertDialog.Builder(this)
-            .setTitle("SAVE AS • NEW PRESET")
-            .setMessage("Masukkan nama preset yang ingin disimpan.")
-            .setView(nameInput)
-            .setNegativeButton("CANCEL", null)
-            .setPositiveButton("SAVE", (dialog, which) -> {
-                String name = nameInput.getText().toString().trim();
-
-                if (name.isEmpty()) {
-                    Toast.makeText(this,
-                            "Nama preset tidak boleh kosong.",
-                            Toast.LENGTH_SHORT).show();
-                    return;
-                }
-
-                for (String existing : getAllPresetNames()) {
-                    if (existing.equalsIgnoreCase(name)) {
-                        Toast.makeText(this,
-                                "Nama preset sudah digunakan.",
-                                Toast.LENGTH_SHORT).show();
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint("Nama preset baru");
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        new AlertDialog.Builder(this).setTitle("SAVE AS • NEW PRESET")
+                .setMessage("Masukkan nama preset yang ingin disimpan.")
+                .setView(input).setNegativeButton("BATAL", null)
+                .setPositiveButton("SIMPAN", (dialog, which) -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty()) {
+                        Toast.makeText(this, "Nama preset tidak boleh kosong.", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                }
-
-                customPresetNames.add(name);
-
-                JSONArray names = new JSONArray();
-                for (String item : customPresetNames) {
-                    names.put(item);
-                }
-
-                presetPreferences.edit()
-                        .putString("custom_preset_names", names.toString())
-                        .apply();
-
-                selectedPreset = presetNames.length
-                        + customPresetNames.size() - 1;
-
-                savePresetProfile(selectedPreset);
-
-                if (presetSpinner != null) {
-                    ArrayAdapter<String> adapter =
-                            new ArrayAdapter<>(this,
-                                    android.R.layout.simple_spinner_item,
-                                    getAllPresetNames());
-                    adapter.setDropDownViewResource(
-                            android.R.layout.simple_spinner_dropdown_item);
-                    presetSpinner.setAdapter(adapter);
-                    presetSpinner.setSelection(selectedPreset);
-                }
-
-                updatePresetLabels();
-
-                Toast.makeText(this,
-                        "Preset baru berhasil disimpan: " + name,
-                        Toast.LENGTH_SHORT).show();
-            })
-            .show();
-
+                    for (String existing : getAllPresetNames()) {
+                        if (existing.equalsIgnoreCase(name)) {
+                            Toast.makeText(this, "Nama preset sudah digunakan.", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                    }
+                    customPresetNames.add(name);
+                    saveCustomPresetNames();
+                    selectedPreset = getAllPresetNames().length - 1;
+                    savePresetProfile(selectedPreset);
+                    refreshAllUi();
+                    Toast.makeText(this, "Preset baru disimpan: " + name, Toast.LENGTH_SHORT).show();
+                }).show();
     }
+
+    private void saveCustomPresetNames() {
+        android.content.SharedPreferences.Editor e = preferences.edit();
+        org.json.JSONArray array = new org.json.JSONArray();
+        for (String name : customPresetNames) array.put(name);
+        e.putString("custom_preset_names", array.toString()).apply();
+    }
+
     private void loadCustomPresetNames() {
-    customPresetNames.clear();
-    String saved = presetPreferences.getString("custom_preset_names", "[]");
-
-    try {
-        JSONArray names = new JSONArray(saved);
-        for (int i = 0; i < names.length(); i++) {
-            customPresetNames.add(names.getString(i));
-        }
-    } catch (Exception e) {
         customPresetNames.clear();
+        String raw = preferences.getString("custom_preset_names", "[]");
+        try {
+            org.json.JSONArray array = new org.json.JSONArray(raw);
+            for (int i = 0; i < array.length(); i++) {
+                String name = array.optString(i, "").trim();
+                if (!name.isEmpty() && !customPresetNames.contains(name)) customPresetNames.add(name);
+            }
+        } catch (Exception ignored) {}
     }
-}
 
-private String[] getAllPresetNames() {
-    java.util.ArrayList<String> all = new java.util.ArrayList<>();
-    java.util.Collections.addAll(all, presetNames);
-    all.addAll(customPresetNames);
-    return all.toArray(new String[0]);
-}
-
-private String getPresetName(int index) {
-    if (index < presetNames.length) {
-        return presetNames[index];
+    private String[] getAllPresetNames() {
+        String[] all = new String[presetNames.length + customPresetNames.size()];
+        System.arraycopy(presetNames, 0, all, 0, presetNames.length);
+        for (int i = 0; i < customPresetNames.size(); i++) all[presetNames.length + i] = customPresetNames.get(i);
+        return all;
     }
-    return customPresetNames.get(index - presetNames.length);
-        }
-    
+
+    private String getPresetName(int index) {
+        String[] all = getAllPresetNames();
+        return all[clamp(index, 0, all.length - 1)];
+    }
+
     private void savePresetProfile(int index) {
-    if (presetPreferences == null) return;
-
-    SharedPreferences.Editor editor = presetPreferences.edit();
-    String key = "preset_" + index + "_";
-
-    editor.putInt(key + "amp", selectedAmp);
-    editor.putInt(key + "cab", selectedCab);
-    editor.putBoolean(key + "ampOn", ampOn);
-    editor.putBoolean(key + "cabOn", cabOn);
-
-    editor.putFloat(key + "gain", ampGain);
-    editor.putFloat(key + "bass", ampBass);
-    editor.putFloat(key + "middle", ampMiddle);
-    editor.putFloat(key + "treble", ampTreble);
-    editor.putFloat(key + "ampVolume", ampVolume);
-    editor.putFloat(key + "masterVolume", masterVolume);
-
-    for (int i = 0; i < EFFECT_COUNT; i++) {
-        editor.putBoolean(key + "effect_" + i,
-                effectEnabled.get(i) != 0);
-
-        for (int j = 0; j < paramNames[i].length; j++) {
-            editor.putInt(key + "param_" + i + "_" + j,
-                    getParam(i, j));
+        String key = "preset_" + index + "_";
+        SharedPreferences.Editor e = preferences.edit();
+        e.putInt(key + "amp", selectedAmp).putInt(key + "cab", selectedCab)
+                .putBoolean(key + "ampOn", ampOn).putBoolean(key + "cabOn", cabOn)
+                .putFloat(key + "gain", ampGain).putFloat(key + "bass", ampBass)
+                .putFloat(key + "middle", ampMiddle).putFloat(key + "treble", ampTreble)
+                .putFloat(key + "ampVolume", ampVolume).putFloat(key + "masterVolume", masterVolume);
+        for (int i = 0; i < EFFECT_COUNT; i++) {
+            e.putBoolean(key + "effect_" + i, effectEnabled[i]);
+            for (int j = 0; j < 3; j++) e.putInt(key + "param_" + i + "_" + j, effectParams[i][j]);
         }
+        e.apply();
     }
-        editor.apply();
-    }
-    
+
     private boolean loadPresetProfile(int index) {
-    if (presetPreferences == null) return false;
-
-    String key = "preset_" + index + "_";
-
-    if (!presetPreferences.contains(key + "amp")) {
-        return false;
-    }
-
-    selectedAmp = presetPreferences.getInt(key + "amp", 0);
-    selectedCab = presetPreferences.getInt(key + "cab", 5);
-
-    ampOn = presetPreferences.getBoolean(key + "ampOn", true);
-    cabOn = presetPreferences.getBoolean(key + "cabOn", true);
-
-    ampGain = presetPreferences.getFloat(key + "gain", 3.0f);
-    ampBass = presetPreferences.getFloat(key + "bass", 0.5f);
-    ampMiddle = presetPreferences.getFloat(key + "middle", 0.5f);
-    ampTreble = presetPreferences.getFloat(key + "treble", 0.6f);
-    ampVolume = presetPreferences.getFloat(key + "ampVolume", 0.7f);
-    masterVolume = presetPreferences.getFloat(key + "masterVolume", 0.72f);
-
-    for (int i = 0; i < EFFECT_COUNT; i++) {
-        setEffectOn(i, presetPreferences.getBoolean(key + "effect_" + i, false));
-
-        for (int j = 0; j < paramNames[i].length; j++) {
-            int value = presetPreferences.getInt(
-                    key + "param_" + i + "_" + j, 50);
-            setParam(i, j, value);
+        String key = "preset_" + index + "_";
+        if (!preferences.contains(key + "amp")) return false;
+        selectedAmp = clamp(preferences.getInt(key + "amp", 0), 0, ampNames.length - 1);
+        selectedCab = clamp(preferences.getInt(key + "cab", 5), 0, cabNames.length - 1);
+        ampOn = preferences.getBoolean(key + "ampOn", true);
+        cabOn = preferences.getBoolean(key + "cabOn", true);
+        ampGain = preferences.getFloat(key + "gain", 3f);
+        ampBass = preferences.getFloat(key + "bass", .5f);
+        ampMiddle = preferences.getFloat(key + "middle", .5f);
+        ampTreble = preferences.getFloat(key + "treble", .6f);
+        ampVolume = preferences.getFloat(key + "ampVolume", .7f);
+        masterVolume = preferences.getFloat(key + "masterVolume", .72f);
+        for (int i = 0; i < EFFECT_COUNT; i++) {
+            effectEnabled[i] = preferences.getBoolean(key + "effect_" + i, false);
+            for (int j = 0; j < 3; j++) effectParams[i][j] = preferences.getInt(key + "param_" + i + "_" + j, 50);
         }
+        pushSettings();
+        return true;
     }
 
-    if (masterSeek != null) {
-        masterSeek.setProgress(Math.round(masterVolume * 100));
-    }
-
-    updateMasterValue(Math.round(masterVolume * 100));
-    refreshEffectControlUi();
-
-    return true;
-    }
-    
     private void updatePresetLabels() {
-    if (presetTitle != null) {
-        if (currentPage.equals("HOME")) {
-            presetTitle.setText("PRESET  •  " + getPresetName(selectedPreset));
-        } else {
-            presetTitle.setText("ACTIVE  •  " + getPresetName(selectedPreset));
+        if (presetTitle != null) {
+            presetTitle.setText((currentPage.equals("HOME") ? "PRESET  •  " : "ACTIVE  •  ")
+                    + getPresetName(selectedPreset));
         }
-    }
-
-    if (presetSpinner != null) {
-        if (presetSpinner.getSelectedItemPosition() != selectedPreset) {
+        if (presetSpinner != null && presetSpinner.getSelectedItemPosition() != selectedPreset) {
             presetSpinner.setSelection(selectedPreset);
         }
     }
-            }
 
     private void refreshEffectControlUi() {
         for (int i = 0; i < EFFECT_COUNT; i++) {
             if (pedalViews[i] != null) pedalViews[i].invalidate();
-            for (int j = 0; j < paramNames[i].length; j++) {
-                SeekBar seek = effectSeekBars[i][j];
-                if (seek != null && seek.getProgress() != getParam(i, j)) seek.setProgress(getParam(i, j));
+            for (int j = 0; j < 3; j++) {
+                if (effectSeekBars[i][j] != null && effectSeekBars[i][j].getProgress() != effectParams[i][j])
+                    effectSeekBars[i][j].setProgress(effectParams[i][j]);
+                if (effectParamValues[i][j] != null && j < paramCount(i))
+                    effectParamValues[i][j].setText(paramNames[i][j] + "  " + effectParams[i][j]);
             }
         }
     }
@@ -1344,12 +715,13 @@ private String getPresetName(int index) {
         if (masterValue != null) masterValue.setText("Master: " + value + "%");
     }
 
-    private void updateEffectParameterFromKnob(int id, int paramIndex, int value) {
-        setParam(id, paramIndex, value);
-        SeekBar seek = effectSeekBars[id][paramIndex];
-        if (seek != null && seek.getProgress() != value) seek.setProgress(value);
-        if (effectParamValues[id][paramIndex] != null) effectParamValues[id][paramIndex].setText(paramNames[id][paramIndex] + "  " + value);
+    private void updateEffectParameterFromKnob(int id, int index, int value) {
+        effectParams[id][index] = clamp(value, 0, 100);
+        if (effectSeekBars[id][index] != null) effectSeekBars[id][index].setProgress(effectParams[id][index]);
+        if (effectParamValues[id][index] != null)
+            effectParamValues[id][index].setText(paramNames[id][index] + "  " + effectParams[id][index]);
         if (pedalViews[id] != null) pedalViews[id].invalidate();
+        pushSettings();
     }
 
     private void refreshLooperUi() {
@@ -1362,93 +734,152 @@ private String getPresetName(int index) {
             looperPlayButton.setText(loopPlaying ? "STOP LOOP" : "PLAY LOOP");
             looperPlayButton.setBackground(bgShape(Color.rgb(25, 34, 53), loopPlaying ? RED : CYAN));
         }
-        refreshAudioToggleButtons();
     }
 
     private String looperText() {
-        if (loopRecording) return "● RECORDING  •  " + String.format(Locale.US, "%.1f s", loopWritePos / (float) SAMPLE_RATE);
-        if (loopPlaying) return "▶ LOOP PLAYING  •  " + String.format(Locale.US, "%.1f s", loopLength / (float) SAMPLE_RATE);
-        if (loopLength > 0) return "LOOP READY  •  " + String.format(Locale.US, "%.1f seconds", loopLength / (float) SAMPLE_RATE);
-        return "LOOP EMPTY  •  max 30 seconds";
+        if (loopRecording) return "● RECORDING • " + String.format(Locale.US, "%.1f s", audioEngine == null ? 0 : audioEngine.getLoopLengthSamples() / 44100f);
+        if (loopPlaying) return "▶ LOOP PLAYING • " + String.format(Locale.US, "%.1f seconds", loopLength / 44100f);
+        if (loopLength > 0) return "LOOP READY • " + String.format(Locale.US, "%.1f seconds", loopLength / 44100f);
+        return "LOOP EMPTY • max 30 seconds";
+    }
+
+    private void addHomeButton(String label, int accent, String page) {
+        Button b = new Button(this);
+        styleButton(b, label, accent);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(48));
+        lp.setMargins(0, dp(4), 0, dp(4));
+        pageContainer.addView(b, lp);
+        b.setOnClickListener(v -> showPage(page));
+    }
+
+    private void addControl(LinearLayout parent, String label, int min, int max,
+                            int initial, int accent, IntChanged changed) {
+        LinearLayout group = new LinearLayout(this);
+        group.setOrientation(LinearLayout.VERTICAL);
+        group.setPadding(0, dp(5), 0, dp(3));
+        parent.addView(group);
+        TextView value = text(label + "  " + initial, 11, TEXT, true);
+        group.addView(value);
+        SeekBar seek = new SeekBar(this);
+        seek.setMax(max - min);
+        seek.setProgress(clamp(initial - min, 0, max - min));
+        tintSeek(seek, accent);
+        group.addView(seek);
+        if (label.equals("MASTER VOLUME")) masterSeek = seek;
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                int v = progress + min;
+                value.setText(label + "  " + v);
+                changed.onChanged(v);
+            }
+            @Override public void onStartTrackingTouch(SeekBar bar) {}
+            @Override public void onStopTrackingTouch(SeekBar bar) {}
+        });
+    }
+
+    private void addToggleRow(LinearLayout parent, String label, boolean initial,
+                              ToggleChanged changed, int accent) {
+        LinearLayout r = row();
+        parent.addView(r);
+        r.addView(text(label, 12, TEXT, true), new LinearLayout.LayoutParams(0, dp(44), 1));
+        Button b = new Button(this);
+        styleButton(b, initial ? "ON" : "OFF", accent);
+        r.addView(b, new LinearLayout.LayoutParams(dp(80), dp(42)));
+        b.setOnClickListener(v -> {
+            boolean next = !"ON".equals(b.getText().toString());
+            b.setText(next ? "ON" : "OFF");
+            b.setBackground(bgShape(next ? accent : Color.DKGRAY, accent));
+            changed.onChanged(next);
+        });
+    }
+
+    private AdapterView.OnItemSelectedListener simpleSelection(IntChanged changed) {
+        return new AdapterView.OnItemSelectedListener() {
+            boolean first = true;
+            @Override public void onItemSelected(AdapterView<?> p, View v, int position, long id) {
+                if (first) { first = false; return; }
+                changed.onChanged(position);
+            }
+            @Override public void onNothingSelected(AdapterView<?> p) {}
+        };
+    }
+
+    private int paramCount(int effect) {
+        return effect <= 1 ? 2 : 3;
     }
 
     private String effectDescription(int id) {
         switch (id) {
             case 0: return "Noise gate • threshold / release";
             case 1: return "Compressor • sustain / output level";
-            case 2: return "Overdrive • soft clipping / tone / level";
+            case 2: return "Overdrive • drive / tone / level";
             case 3: return "Distortion • gain / tone / level";
-            case 4: return "Distortion+ • harder clipping / tone";
-            case 5: return "Modulation • chorus-like modulated delay";
+            case 4: return "Distortion+ • gain / tone / level";
+            case 5: return "Modulation • rate / depth / mix";
             case 6: return "Delay • time / feedback / mix";
-            default: return "Reverb • feedback ambience / tone / mix";
+            default: return "Reverb • decay / tone / mix";
         }
     }
 
-    private void setAudioMessage(String message) {
-        audioMessage = message;
+    private String noteText(float frequency) {
+        if (frequency <= 0) return "--\nMenunggu sinyal";
+        String[] names = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+        int midi = (int) Math.round(69 + 12 * (Math.log(frequency / 440.0) / Math.log(2)));
+        int note = (midi % 12 + 12) % 12;
+        int octave = midi / 12 - 1;
+        double target = 440 * Math.pow(2, (midi - 69) / 12.0);
+        int cents = (int) Math.round(1200 * Math.log(frequency / target) / Math.log(2));
+        return names[note] + octave + "\n" + String.format(Locale.US, "%.1f Hz  •  %+d cents", frequency, cents);
+    }
+
+    @Override
+    public void onStatus(String message) {
         runOnUiThread(() -> {
-            if (audioStatus != null) audioStatus.setText(audioMessage);
-            refreshAudioToggleButtons();
-            refreshLooperUi();
+            audioMessage = message;
+            if (audioStatus != null) audioStatus.setText(message);
+            refreshAudioButtons();
         });
     }
 
-    private float ampDriveScale(int model) {
-        switch (model) {
-            case 0: return 0.72f;
-            case 1: return 0.82f;
-            case 2: return 1.02f;
-            case 3: return 0.86f;
-            case 4: return 1.12f;
-            case 5: return 1.20f;
-            case 6: return 1.32f;
-            case 7: return 1.62f;
-            case 8: return 1.85f;
-            case 9: return 0.68f;
-            case 10: return 1.16f;
-            default: return 1.42f;
-        }
+    @Override
+    public void onPitch(float frequencyHz) {
+        tunerFrequency = frequencyHz;
+        runOnUiThread(() -> {
+            if (tunerNote != null) tunerNote.setText(noteText(frequencyHz));
+        });
     }
 
-    private float ampOutputScale(int model) {
-        return 0.92f + (model % 4) * 0.04f;
+    @Override
+    public void onLooperChanged(boolean recording, boolean playing, int samples) {
+        loopRecording = recording;
+        loopPlaying = playing;
+        loopLength = samples;
+        runOnUiThread(this::refreshLooperUi);
     }
 
-    private float cabCutoff(int model) {
-        switch (model) {
-            case 0: return 0.045f;
-            case 1: return 0.060f;
-            case 2: return 0.085f;
-            case 3: return 0.105f;
-            case 4: return 0.150f;
-            case 5: return 0.095f;
-            case 6: return 0.125f;
-            case 7: return 0.080f;
-            default: return 0.100f;
-        }
-    }
-
-    private void refreshAudioToggleButtons() {
+    private void refreshAudioButtons() {
+        boolean running = audioEngine != null && audioEngine.isRunning();
         if (audioToggleButton != null) {
-            audioToggleButton.setText(audioRunning ? "STOP AUDIO ENGINE" : "START MIC / USB AUDIO");
-            audioToggleButton.setBackground(bgShape(Color.rgb(25, 34, 53), audioRunning ? RED : GREEN));
+            audioToggleButton.setText(running ? "STOP AUDIO ENGINE" : "START MIC / USB AUDIO");
+            audioToggleButton.setBackground(bgShape(Color.rgb(25, 34, 53), running ? RED : GREEN));
         }
-        if (looperAudioButton != null) {
-            looperAudioButton.setText(audioRunning ? "STOP AUDIO ENGINE" : "START AUDIO ENGINE");
-            looperAudioButton.setBackground(bgShape(Color.rgb(25, 34, 53), audioRunning ? RED : BLUE));
+        if (currentPage.equals("TUNER") && tunerNote != null && !running && tunerFrequency <= 0) {
+            tunerNote.setText("--\nAudio berhenti");
         }
     }
 
-    private boolean isEffectOn(int id) { return effectEnabled.get(id) != 0; }
-    private void setEffectOn(int id, boolean on) { effectEnabled.set(id, on ? 1 : 0); }
-    private int getParam(int id, int param) { return effectParams.get(id * PARAMS_PER_EFFECT + param); }
-    private void setParam(int id, int param, int value) { effectParams.set(id * PARAMS_PER_EFFECT + param, clamp(value, 0, 100)); }
-    private int gainToUi(float gain) { return clamp(Math.round((gain - 0.5f) / 0.075f), 0, 100); }
+    private void section(String title, String subtitle) {
+        TextView t = text(title, 14, CYAN, true);
+        t.setPadding(dp(2), dp(12), 0, dp(3));
+        pageContainer.addView(t);
+        TextView sub = text(subtitle, 10, MUTED, false);
+        sub.setPadding(dp(2), 0, 0, dp(8));
+        pageContainer.addView(sub);
+    }
 
-    private void navigate(String page) {
-        showPage(page);
-        setupNavigation();
+    private void sectionIn(LinearLayout parent, String title, String subtitle) {
+        parent.addView(text(title, 14, CYAN, true));
+        parent.addView(text(subtitle, 10, MUTED, false));
     }
 
     private void setupNavigation() {
@@ -1458,22 +889,21 @@ private String getPresetName(int index) {
         String[] labels = {"Home", "Pedal", "Amp/Cab", "Tuner", "Looper", "Preset", "Audio"};
         for (int i = 0; i < pages.length; i++) {
             final String page = pages[i];
-            TextView b = text(labels[i], 10, page.equals(currentPage) ? CYAN : TEXT, page.equals(currentPage));
-            b.setGravity(Gravity.CENTER);
-            b.setClickable(true);
-            b.setFocusable(true);
-            b.setPadding(dp(1), dp(7), dp(1), dp(7));
-            b.setBackgroundColor(Color.TRANSPARENT);
-            bottomNavigation.addView(b, new LinearLayout.LayoutParams(0, -1, 1));
-            b.setOnClickListener(v -> navigate(page));
+            TextView item = text(labels[i], 10, page.equals(currentPage) ? CYAN : TEXT, page.equals(currentPage));
+            item.setGravity(Gravity.CENTER);
+            item.setClickable(true);
+            item.setFocusable(true);
+            bottomNavigation.addView(item, new LinearLayout.LayoutParams(0, -1, 1));
+            item.setOnClickListener(v -> showPage(page));
         }
     }
 
     private Spinner spinner(String[] values) {
         Spinner s = new Spinner(this);
-        ArrayAdapter<String> a = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, values);
-        a.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        s.setAdapter(a);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, values);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        s.setAdapter(adapter);
         return s;
     }
 
@@ -1493,24 +923,6 @@ private String getPresetName(int index) {
         r.setOrientation(LinearLayout.HORIZONTAL);
         r.setGravity(Gravity.CENTER_VERTICAL);
         return r;
-    }
-
-    private void section(String title, String subtitle) {
-        TextView t = text(title, 14, CYAN, true);
-        t.setPadding(dp(2), dp(12), 0, dp(3));
-        root.addView(t);
-        TextView sub = text(subtitle, 10, MUTED, false);
-        sub.setPadding(dp(2), 0, 0, dp(8));
-        root.addView(sub);
-    }
-
-    private void sectionIn(LinearLayout parent, String title, String subtitle) {
-        TextView t = text(title, 14, CYAN, true);
-        t.setPadding(0, dp(3), 0, dp(4));
-        parent.addView(t);
-        TextView s = text(subtitle, 10, MUTED, false);
-        s.setPadding(0, 0, 0, dp(8));
-        parent.addView(s);
     }
 
     private TextView text(String value, int size, int color, boolean bold) {
@@ -1550,12 +962,21 @@ private String getPresetName(int index) {
         return 0;
     }
 
-    private int dp(int value) {
-        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+    private int gainToUi(float gain) {
+        return clamp(Math.round((gain - .5f) / .075f), 0, 100);
     }
 
-    private static int clamp(int v, int min, int max) { return Math.max(min, Math.min(max, v)); }
-    private static float clampFloat(float v, float min, float max) { return Math.max(min, Math.min(max, v)); }
+    private int dp(int value) {
+        return (int) (value * getResources().getDisplayMetrics().density + .5f);
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private void navigate(String page) {
+        showPage(page);
+    }
 
     private class PedalFaceView extends View {
         private final int effectId;
@@ -1574,10 +995,11 @@ private String getPresetName(int index) {
             density = getResources().getDisplayMetrics().density;
             setLayerType(View.LAYER_TYPE_SOFTWARE, null);
             setClickable(true);
-            setContentDescription(effectNames[id] + ", ketuk sakelar kaki untuk ON/OFF atau geser kenop untuk mengubah parameter");
+            setContentDescription(effectNames[id] + " pedal; ketuk bagian bawah untuk ON/OFF, geser kenop untuk parameter.");
         }
 
-        private float d(float v) { return v * density; }
+        private float d(float value) { return value * density; }
+
         private void setPaint(int color, float size, boolean bold) {
             paint.setColor(color);
             paint.setTextSize(d(size));
@@ -1586,6 +1008,7 @@ private String getPresetName(int index) {
             paint.setShader(null);
             paint.setStrokeWidth(d(1));
         }
+
         private void centered(Canvas canvas, String label, float x, float y, int color, float size, boolean bold) {
             setPaint(color, size, bold);
             paint.setTextAlign(Paint.Align.CENTER);
@@ -1598,23 +1021,22 @@ private String getPresetName(int index) {
             canvas.drawCircle(x + d(1), y + d(2), radius + d(1), paint);
             setPaint(0xFF080D16, 1, false);
             canvas.drawCircle(x, y, radius + d(3), paint);
-            setPaint(isEffectOn(effectId) ? accent : 0xFF526174, 1, false);
+            setPaint(effectEnabled[effectId] ? accent : 0xFF526174, 1, false);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(d(2));
             canvas.drawCircle(x, y, radius + d(1), paint);
             paint.setStyle(Paint.Style.FILL);
             setPaint(0xFF263247, 1, false);
             canvas.drawCircle(x, y, radius, paint);
-            float position = value / 100f;
-            double angle = Math.toRadians(135 + 270 * position);
-            float x1 = x + (float) Math.cos(angle) * radius * 0.2f;
-            float y1 = y + (float) Math.sin(angle) * radius * 0.2f;
-            float x2 = x + (float) Math.cos(angle) * radius * 0.76f;
-            float y2 = y + (float) Math.sin(angle) * radius * 0.76f;
+            double angle = Math.toRadians(135 + 270 * value / 100f);
+            float x1 = x + (float) Math.cos(angle) * radius * .2f;
+            float y1 = y + (float) Math.sin(angle) * radius * .2f;
+            float x2 = x + (float) Math.cos(angle) * radius * .76f;
+            float y2 = y + (float) Math.sin(angle) * radius * .76f;
             setPaint(Color.WHITE, 1, false);
             paint.setStrokeWidth(d(2));
             canvas.drawLine(x1, y1, x2, y2, paint);
-            centered(canvas, label, x, y + radius + d(17), 0xFFDCE7F5, 9, true);
+            centered(canvas, label, x, y + radius + d(17), 0xFFDCE7F5, 8, true);
             centered(canvas, String.valueOf(value), x, y + d(4), Color.WHITE, 9, true);
         }
 
@@ -1625,39 +1047,37 @@ private String getPresetName(int index) {
             setPaint(0xFF050811, 1, false);
             canvas.drawRoundRect(rect, d(17), d(17), paint);
             RectF face = new RectF(pad + d(4), d(8), w - pad - d(4), h - d(8));
-            setPaint(isEffectOn(effectId) ? accent : 0xFF354052, 1, false);
+            setPaint(effectEnabled[effectId] ? accent : 0xFF354052, 1, false);
             canvas.drawRoundRect(face, d(14), d(14), paint);
             RectF inner = new RectF(face.left + d(5), face.top + d(5), face.right - d(5), face.bottom - d(5));
             setPaint(0xFF111A2A, 1, false);
             canvas.drawRoundRect(inner, d(11), d(11), paint);
-            setPaint(accent, 1, false);
-            canvas.drawRoundRect(new RectF(inner.left, inner.top, inner.left + d(4), inner.bottom), d(3), d(3), paint);
-            centered(canvas, "STRADA  /  EFFECTS", w / 2f, d(27), 0xFF9DB0C9, 8, true);
-            centered(canvas, effectNames[effectId], w / 2f, d(48), isEffectOn(effectId) ? accent : 0xFFDCE5F2, 16, true);
-            setPaint(isEffectOn(effectId) ? accent : 0xFF455063, 1, false);
-            canvas.drawCircle(w - d(27), d(26), d(6), paint);
-            int count = paramNames[effectId].length;
-            float gap = w / (count + 1f);
-            float cy = h * 0.49f;
-            float radius = Math.min(d(18), w / (count == 2 ? 9f : 14f));
-            for (int j = 0; j < count; j++) drawKnob(canvas, gap * (j + 1), cy, radius,
-                    paramNames[effectId][j].toUpperCase(Locale.US), getParam(effectId, j));
+            centered(canvas, "STRADA / EFFECTS", w / 2f, d(27), 0xFF9DB0C9, 8, true);
+            centered(canvas, effectNames[effectId], w / 2f, d(48),
+                    effectEnabled[effectId] ? accent : 0xFFDCE5F2, 16, true);
+            float gap = w / (paramCount(effectId) + 1f);
+            float cy = h * .49f;
+            float radius = Math.min(d(18), w / (paramCount(effectId) == 2 ? 9f : 14f));
+            for (int j = 0; j < paramCount(effectId); j++) {
+                drawKnob(canvas, gap * (j + 1), cy, radius,
+                        paramNames[effectId][j].toUpperCase(Locale.US), effectParams[effectId][j]);
+            }
             float sx = w / 2f, sy = h - d(30);
             setPaint(0xFF070B12, 1, false);
             canvas.drawCircle(sx, sy, d(13), paint);
-            setPaint(isEffectOn(effectId) ? accent : 0xFF68768B, 1, false);
+            setPaint(effectEnabled[effectId] ? accent : 0xFF68768B, 1, false);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(d(2));
             canvas.drawCircle(sx, sy, d(9), paint);
             paint.setStyle(Paint.Style.FILL);
-            centered(canvas, isEffectOn(effectId) ? "ACTIVE  •  TAP TO BYPASS" : "BYPASSED  •  TAP TO ACTIVATE",
-                    sx, h - d(8), isEffectOn(effectId) ? Color.WHITE : 0xFF9AA8BB, 8, true);
+            centered(canvas, effectEnabled[effectId] ? "ACTIVE • TAP TO BYPASS" : "BYPASSED • TAP TO ACTIVATE",
+                    sx, h - d(8), effectEnabled[effectId] ? Color.WHITE : 0xFF9AA8BB, 8, true);
         }
 
         @Override public boolean onTouchEvent(MotionEvent event) {
             float x = event.getX(), y = event.getY(), w = getWidth(), h = getHeight();
-            float cy = h * 0.49f;
-            int count = paramNames[effectId].length;
+            float cy = h * .49f;
+            int count = paramCount(effectId);
             float gap = w / (count + 1f);
             float radius = Math.min(d(18), w / (count == 2 ? 9f : 14f));
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
@@ -1669,14 +1089,13 @@ private String getPresetName(int index) {
                     int nearest = -1;
                     float distance = Float.MAX_VALUE;
                     for (int j = 0; j < count; j++) {
-                        float centerX = gap * (j + 1);
-                        float next = Math.abs(x - centerX);
+                        float next = Math.abs(x - gap * (j + 1));
                         if (next < distance) { distance = next; nearest = j; }
                     }
-                    if (nearest >= 0 && distance <= gap * 0.48f) {
+                    if (nearest >= 0 && distance <= gap * .48f) {
                         draggingParam = nearest;
                         dragStartY = y;
-                        dragStartValue = getParam(effectId, nearest);
+                        dragStartValue = effectParams[effectId][nearest];
                         getParent().requestDisallowInterceptTouchEvent(true);
                         return true;
                     }
@@ -1688,7 +1107,8 @@ private String getPresetName(int index) {
                 return true;
             } else if (event.getAction() == MotionEvent.ACTION_UP) {
                 if (draggingParam == -2) {
-                    setEffectOn(effectId, !isEffectOn(effectId));
+                    effectEnabled[effectId] = !effectEnabled[effectId];
+                    pushSettings();
                     invalidate();
                 }
                 boolean handled = draggingParam != -1;
@@ -1705,14 +1125,7 @@ private String getPresetName(int index) {
     }
 
     @Override protected void onDestroy() {
-    audioRunning = false;
-    loopRecording = false;
-    loopPlaying = false;
-
-    if (usbAudioDetector != null) {
-        usbAudioDetector.stop();
-    }
-
-    super.onDestroy();
+        if (audioEngine != null) audioEngine.release();
+        super.onDestroy();
     }
 }
