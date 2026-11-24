@@ -821,7 +821,7 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
     }
 
     private void addControl(LinearLayout parent, String label, int min, int max,
-                            int initial, int accent, IntChanged changed) {
+        int initial, int accent, IntChanged changed) {
         LinearLayout group = new LinearLayout(this);
         group.setOrientation(LinearLayout.VERTICAL);
         group.setPadding(0, dp(5), 0, dp(3));
