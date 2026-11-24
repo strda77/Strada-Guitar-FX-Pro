@@ -33,6 +33,13 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 public class MainActivity extends Activity implements AudioEngine.Listener {
+    private interface IntChanged {
+        void onChanged(int value);
+    }
+
+    private interface ToggleChanged {
+        void onChanged(boolean value);
+    }
 
     private static final int BG = Color.rgb(7, 10, 18);
     private static final int PANEL = Color.rgb(15, 22, 36);
