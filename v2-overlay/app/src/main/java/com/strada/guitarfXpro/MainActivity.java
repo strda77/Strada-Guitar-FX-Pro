@@ -225,47 +225,115 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
     }
 
     private void buildHomePage() {
-        TextView logo = text("STRADA", 34, CYAN, true);
-        logo.setLetterSpacing(.14f);
-        logo.setPadding(dp(4), dp(8), dp(4), 0);
-        pageContainer.addView(logo);
-        pageContainer.addView(text("GUITAR FX PRO  •  REAL-TIME EFFECTS", 12, PURPLE, true));
+    LinearLayout header = row();
+    header.setPadding(dp(2), dp(10), dp(2), dp(12));
+    pageContainer.addView(header);
 
-        LinearLayout hero = card(CYAN);
-        pageContainer.addView(hero);
-        sectionIn(hero, "MAIN CONTROL", "Preset, master output, and audio engine");
-        presetTitle = text("PRESET  •  " + getPresetName(selectedPreset), 16, TEXT, true);
-        hero.addView(presetTitle);
-        presetSpinner = spinner(getAllPresetNames());
-        presetSpinner.setSelection(selectedPreset);
-        hero.addView(presetSpinner, new LinearLayout.LayoutParams(-1, dp(48)));
-        presetSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            boolean first = true;
-            @Override public void onItemSelected(AdapterView<?> p, View v, int position, long id) {
-                if (first) { first = false; return; }
-                applyPresetValues(position, true);
-            }
-            @Override public void onNothingSelected(AdapterView<?> p) {}
-        });
+    LinearLayout brand = new LinearLayout(this);
+    brand.setOrientation(LinearLayout.VERTICAL);
+    header.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
+    TextView logo = text("STRADA", 28, CYAN, true);
+    logo.setLetterSpacing(.12f);
+    brand.addView(logo);
+    brand.addView(text("GUITAR FX PRO  /  DIGITAL RIG", 9, MUTED, true));
 
-        addControl(hero, "MASTER VOLUME", 0, 100, Math.round(masterVolume * 100), CYAN,
-                value -> { masterVolume = value / 100f; updateMasterValue(value); pushSettings(); });
-        masterValue = text("Master: " + Math.round(masterVolume * 100) + "%", 12, CYAN, true);
-        hero.addView(masterValue);
-        addAudioToggle(hero);
-        audioStatus = text(audioMessage, 11, MUTED, false);
-        audioStatus.setPadding(0, dp(7), 0, dp(2));
-        hero.addView(audioStatus);
+    TextView live = text(audioEngine != null && audioEngine.isRunning()
+            ? "● LIVE" : "● STANDBY", 11,
+            audioEngine != null && audioEngine.isRunning() ? GREEN : ORANGE, true);
+    live.setGravity(Gravity.CENTER);
+    live.setPadding(dp(12), dp(8), dp(12), dp(8));
+    live.setBackground(bgShape(PANEL,
+            audioEngine != null && audioEngine.isRunning() ? GREEN : ORANGE));
+    header.addView(live);
 
-        section("QUICK ACCESS", "Buka modul yang ingin kamu atur.");
-        addHomeButton("PEDALBOARD  →", CYAN, "PEDALBOARD");
-        addHomeButton("AMPLIFIER & CABINET  →", PURPLE, "AMP & CAB");
-        addHomeButton("GUITAR TUNER  →", GREEN, "TUNER");
-        addHomeButton("LOOPER  →", ORANGE, "LOOPER");
-        addHomeButton("PRESET LIBRARY  •  60 TONES  →", BLUE, "PRESETS");
-        addHomeButton("AUDIO INPUT / OUTPUT  →", RED, "AUDIO");
-        pageContainer.addView(text("Gunakan headphone untuk mengurangi feedback dari mikrofon HP.", 10, MUTED, false));
+    LinearLayout hero = card(CYAN);
+    pageContainer.addView(hero);
+    hero.addView(text("NOW PLAYING", 10, CYAN, true));
+    presetTitle = text(getPresetName(selectedPreset), 23, TEXT, true);
+    presetTitle.setPadding(0, dp(5), 0, dp(2));
+    hero.addView(presetTitle);
+    hero.addView(text("PRESET  •  " + (selectedPreset + 1) + " / " + presetNames.length,
+            10, MUTED, true));
+
+    presetSpinner = spinner(getAllPresetNames());
+    presetSpinner.setSelection(selectedPreset);
+    LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, dp(48));
+    sp.topMargin = dp(8);
+    hero.addView(presetSpinner, sp);
+    presetSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        boolean first = true;
+        @Override public void onItemSelected(AdapterView<?> p, View v, int position, long id) {
+            if (first) { first = false; return; }
+            applyPresetValues(position, true);
+        }
+        @Override public void onNothingSelected(AdapterView<?> p) {}
+    });
+
+    LinearLayout masterPanel = card(PURPLE);
+    pageContainer.addView(masterPanel);
+    LinearLayout masterHeader = row();
+    masterPanel.addView(masterHeader);
+    masterHeader.addView(text("MASTER OUTPUT", 12, TEXT, true),
+            new LinearLayout.LayoutParams(0, -2, 1));
+    masterValue = text(Math.round(masterVolume * 100) + "%", 20, CYAN, true);
+    masterHeader.addView(masterValue);
+    addControl(masterPanel, "OUTPUT LEVEL", 0, 100,
+            Math.round(masterVolume * 100), CYAN,
+            value -> {
+                masterVolume = value / 100f;
+                updateMasterValue(value);
+                pushSettings();
+            });
+
+    addAudioToggle(masterPanel);
+    audioStatus = text(audioMessage, 11, MUTED, false);
+    audioStatus.setPadding(0, dp(8), 0, dp(2));
+    masterPanel.addView(audioStatus);
+
+    section("SIGNAL CHAIN", "Delapan blok efek • ketuk untuk membuka pedalboard");
+    LinearLayout chain = card(BLUE);
+    pageContainer.addView(chain);
+    LinearLayout chainRow = row();
+    chain.addView(chainRow);
+    for (int i = 0; i < EFFECT_COUNT; i++) {
+        final int effect = i;
+        TextView chip = text(effectNames[i], 9,
+                effectEnabled[i] ? effectColors[i] : MUTED, true);
+        chip.setGravity(Gravity.CENTER);
+        chip.setPadding(dp(5), dp(10), dp(5), dp(10));
+        chip.setBackground(bgShape(Color.rgb(8, 14, 25),
+                effectEnabled[i] ? effectColors[i] : Color.rgb(55, 66, 82)));
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, -2, 1);
+        cp.setMargins(dp(2), 0, dp(2), 0);
+        chainRow.addView(chip, cp);
+        chip.setOnClickListener(v -> showPage("PEDALBOARD"));
     }
+
+    section("QUICK ACCESS", "Pilih modul untuk membentuk tone.");
+    addHomeButton("PEDALBOARD  /  EFFECTS", CYAN, "PEDALBOARD");
+    addHomeButton("AMPLIFIER  &  CABINET", PURPLE, "AMP & CAB");
+    LinearLayout tools = row();
+    pageContainer.addView(tools);
+    addCompactHomeButton(tools, "TUNER", GREEN, "TUNER");
+    addCompactHomeButton(tools, "LOOPER", ORANGE, "LOOPER");
+    addHomeButton("PRESET LIBRARY  •  60 TONES", BLUE, "PRESETS");
+    addHomeButton("AUDIO ROUTING  /  INPUT & OUTPUT", RED, "AUDIO");
+
+    TextView foot = text("Gunakan headphone atau USB audio interface yang kompatibel. "
+            + "Status LIVE hanya menunjukkan engine berjalan, bukan jaminan latensi atau kualitas profesional.",
+            9, MUTED, false);
+    foot.setPadding(dp(3), dp(10), dp(3), dp(16));
+    pageContainer.addView(foot);
+}
+
+    private void addCompactHomeButton(LinearLayout parent, String label, int accent, String page) {
+    Button b = new Button(this);
+    styleButton(b, label, accent);
+    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(52), 1);
+    lp.setMargins(dp(3), dp(3), dp(3), dp(3));
+    parent.addView(b, lp);
+    b.setOnClickListener(v -> showPage(page));
+}
 
     private void buildPedalboardPage() {
         section("FULL COLOR PEDALBOARD", "Ketuk pedal untuk ON/OFF. Geser kenop atau gunakan slider.");
@@ -883,20 +951,43 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
     }
 
     private void setupNavigation() {
-        if (bottomNavigation == null) return;
-        bottomNavigation.removeAllViews();
-        String[] pages = {"HOME", "PEDALBOARD", "AMP & CAB", "TUNER", "LOOPER", "PRESETS", "AUDIO"};
-        String[] labels = {"Home", "Pedal", "Amp/Cab", "Tuner", "Looper", "Preset", "Audio"};
-        for (int i = 0; i < pages.length; i++) {
-            final String page = pages[i];
-            TextView item = text(labels[i], 10, page.equals(currentPage) ? CYAN : TEXT, page.equals(currentPage));
-            item.setGravity(Gravity.CENTER);
-            item.setClickable(true);
-            item.setFocusable(true);
-            bottomNavigation.addView(item, new LinearLayout.LayoutParams(0, -1, 1));
-            item.setOnClickListener(v -> showPage(page));
-        }
+    if (bottomNavigation == null) return;
+    bottomNavigation.removeAllViews();
+    bottomNavigation.setPadding(dp(4), dp(5), dp(4), dp(5));
+    bottomNavigation.setBackgroundColor(Color.rgb(10, 16, 28));
+
+    String[] pages = {"HOME", "PEDALBOARD", "AMP & CAB", "TUNER", "PRESETS"};
+    String[] labels = {"HOME", "BOARD", "AMP", "TOOLS", "PRESET"};
+    String[] symbols = {"⌂", "◈", "◉", "♫", "▤"};
+
+    for (int i = 0; i < pages.length; i++) {
+        final String page = pages[i];
+        boolean active = page.equals(currentPage);
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
+        item.setPadding(dp(2), dp(3), dp(2), dp(3));
+        item.setBackground(active
+                ? bgShape(Color.rgb(20, 38, 55), CYAN)
+                : bgShape(Color.rgb(10, 16, 28), Color.rgb(10, 16, 28)));
+
+        TextView symbol = text(symbols[i], 17, active ? CYAN : MUTED, true);
+        symbol.setGravity(Gravity.CENTER);
+        item.addView(symbol);
+
+        TextView caption = text(labels[i], 8, active ? TEXT : MUTED, true);
+        caption.setGravity(Gravity.CENTER);
+        item.addView(caption);
+
+        bottomNavigation.addView(item, new LinearLayout.LayoutParams(0, -1, 1));
+        item.setClickable(true);
+        item.setFocusable(true);
+        item.setOnClickListener(v -> {
+            if ("TOOLS".equals(page)) showPage("TUNER");
+            else showPage(page);
+        });
     }
+ }
 
     private Spinner spinner(String[] values) {
         Spinner s = new Spinner(this);
