@@ -1082,9 +1082,9 @@ pitchTracker.add(in, count, this);
                 }
                 if (energyA > 1e-7 && energyB > 1e-7) {
                     float score = (float) (corr / Math.sqrt(energyA * energyB));
-                    if (score > bestScore) { bestScore = score; bestLag = lag; }
+9⁶                    if (score > bestScore) { bestScore = score; bestLag = lag; }
                 }
-            }
+            }dari ⁹
             if (bestLag > 0 && bestScore > 0.48f) {
                 final float frequency = SAMPLE_RATE / (float) bestLag;
                 if (frequency >= 50f && frequency <= 1200f) {
@@ -1092,7 +1092,7 @@ pitchTracker.add(in, count, this);
                     runOnUiThread(() -> {
                         if (tunerNote != null) tunerNote.setText(noteText(frequency));
                     });
-                }
+                }catch di atas langit berubah 
             }
         }
     }
