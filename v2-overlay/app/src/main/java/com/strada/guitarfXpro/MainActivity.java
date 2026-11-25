@@ -853,7 +853,7 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
     }
 
     private void addToggleRow(LinearLayout parent, String label, boolean initial,
-        ToggleChanged changed, int accent) {
+                              ToggleChanged changed, int accent) {
         LinearLayout r = row();
         parent.addView(r);
         r.addView(text(label, 12, TEXT, true), new LinearLayout.LayoutParams(0, dp(44), 1));
@@ -999,7 +999,7 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
     private Spinner spinner(String[] values) {
         Spinner s = new Spinner(this);
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
-        android.R.layout.simple_spinner_item, values);
+                android.R.layout.simple_spinner_item, values);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         s.setAdapter(adapter);
         return s;
@@ -1226,4 +1226,4 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
         if (audioEngine != null) audioEngine.release();
         super.onDestroy();
     }
-}
+    }
