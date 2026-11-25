@@ -31,8 +31,13 @@ public final class AudioEngine {
     }
 
     public static final class Settings {
-        public final boolean[] enabled = new boolean[EFFECTS];
-        public final int[][] params = new int[EFFECTS][3];
+    public final boolean[] enabled = new boolean[EFFECTS];
+    public final int[][] params = new int[EFFECTS][3];
+
+    // Urutan pemrosesan efek, berdasarkan ID slot.
+    public final int[] effectOrder = {
+        0, 1, 2, 3, 4, 5, 6, 7
+    };
 
         public float master = .72f;
         public float gain = 3f;
@@ -52,6 +57,7 @@ public final class AudioEngine {
             Settings copy = new Settings();
             synchronized (this) {
                 System.arraycopy(enabled, 0, copy.enabled, 0, EFFECTS);
+                System.arraycopy(effectOrder, 0, copy.effectOrder, 0, EFFECTS);
                 for (int i = 0; i < EFFECTS; i++) {
                     System.arraycopy(params[i], 0, copy.params[i], 0, 3);
                 }
@@ -105,6 +111,49 @@ public final class AudioEngine {
     }
 
     public void updateSettings(Settings value) {
+     
+        /**
+         * Mengubah urutan signal chain.
+         * ID efek tetap:
+         * 0 Gate
+         * 1 Compressor
+         * 2 Overdrive
+         * 3 Distortion
+         * 4 Fuzz
+         * 5 Modulation
+         * 6 Delay
+         * 7 Reverb
+         */
+    public synchronized boolean setEffectOrder(int[] order) {
+    if (order == null || order.length != EFFECTS) {
+        return false;
+    }
+
+    boolean[] used = new boolean[EFFECTS];
+
+    for (int id : order) {
+        if (id < 0 || id >= EFFECTS || used[id]) {
+            return false;
+        }
+        used[id] = true;
+    }
+
+    Settings updated = settings.copy();
+
+    System.arraycopy(
+            order, 0,
+            updated.effectOrder, 0,
+            EFFECTS
+    );
+
+    settings = updated;
+    return true;
+}
+
+    public int[] getEffectOrder() {
+    Settings current = settings.copy();
+    return current.effectOrder.clone();
+}
         if (value != null) settings = value.copy();
     }
 
@@ -371,135 +420,285 @@ public final class AudioEngine {
         return Math.max(0, Math.min(100, s.params[effect][index]));
     }
 
+    
     private void processBlock(short[] input, short[] output, int count, Settings s) {
-        for (int i = 0; i < count; i++) {
-            float x = input[i] / 32768f;
 
-            if (s.enabled[0]) {
-                float level = Math.abs(x);
-                float coefficient = level > gateEnvelope
-                        ? .25f : .004f + parameter(s, 0, 1) * .0008f;
-                gateEnvelope += coefficient * (level - gateEnvelope);
-                if (gateEnvelope < .002f + parameter(s, 0, 0) * .00095f) x *= .025f;
+    for (int i = 0; i < count; i++) {
+        float x = input[i] / 32768f;
+
+        // PROCESS EFFECTS ACCORDING TO CUSTOM SIGNAL CHAIN
+        for (int chainIndex = 0; chainIndex < EFFECTS; chainIndex++) {
+
+            int effectId = s.effectOrder[chainIndex];
+
+            if (effectId < 0 || effectId >= EFFECTS) {
+                continue;
             }
 
-            if (s.enabled[1]) {
-                float level = Math.abs(x);
-                compressorEnvelope += (level > compressorEnvelope ? .18f : .012f)
-                        * (level - compressorEnvelope);
-                float threshold = .38f - parameter(s, 1, 0) * .0027f;
-                if (compressorEnvelope > threshold && compressorEnvelope > .0001f) {
-                    float ratio = 1f + parameter(s, 1, 0) / 18f;
-                    x *= (threshold + (compressorEnvelope - threshold) / ratio)
-                            / compressorEnvelope;
+            if (!s.enabled[effectId]) {
+                // Keep delay and reverb buffers moving smoothly.
+                if (effectId == 6) {
+                    delay[delayPosition] = x;
+                    delayPosition = (delayPosition + 1) % delay.length;
+                } else if (effectId == 7) {
+                    reverb[reverbPosition] = x;
+                    reverbPosition = (reverbPosition + 1) % reverb.length;
                 }
-                x *= .65f + parameter(s, 1, 1) * .007f;
+                continue;
             }
 
-            if (s.enabled[2]) {
-                float shaped = (float) Math.tanh(x * (1f + parameter(s, 2, 0) / 7f));
-                overdriveState += (.015f + parameter(s, 2, 1) * .0022f)
-                        * (shaped - overdriveState);
-                x = (overdriveState * (1f - parameter(s, 2, 1) / 150f)
-                        + shaped * parameter(s, 2, 1) / 150f)
-                        * (.5f + parameter(s, 2, 2) * .009f);
-            }
+            switch (effectId) {
 
-            if (s.enabled[3]) {
-                float shaped = (float) Math.tanh(x * (1f + parameter(s, 3, 0) / 4f));
-                distortionState += (.015f + parameter(s, 3, 1) * .0025f)
-                        * (shaped - distortionState);
-                x = (distortionState * (1f - parameter(s, 3, 1) / 160f)
-                        + shaped * parameter(s, 3, 1) / 160f)
-                        * (.45f + parameter(s, 3, 2) * .0095f);
-            }
+                case 0: // GATE
+                {
+                    float level = Math.abs(x);
+                    float coefficient = level > gateEnvelope
+                            ? .25f
+                            : .004f + parameter(s, 0, 1) * .0008f;
 
-            if (s.enabled[4]) {
-                float shaped = (float) Math.tanh(x * (1.5f + parameter(s, 4, 0) / 3.2f));
-                fuzzState += (.01f + parameter(s, 4, 1) * .0028f) * (shaped - fuzzState);
-                x = (fuzzState * (1f - parameter(s, 4, 1) / 170f)
-                        + shaped * parameter(s, 4, 1) / 170f)
-                        * (.4f + parameter(s, 4, 2) * .009f);
-            }
+                    gateEnvelope += coefficient * (level - gateEnvelope);
 
-            if (s.enabled[5]) {
-                chorus[chorusPosition] = x;
-                int modulation = (int) ((Math.sin(chorusPhase) * .5 + .5)
-                        * parameter(s, 5, 1) * RATE * .00018f);
-                int distance = Math.max(1, Math.min(chorus.length - 1,
-                        (int) (RATE * .008f) + modulation));
-                float wet = chorus[(chorusPosition - distance + chorus.length) % chorus.length];
-                float mix = parameter(s, 5, 2) / 100f;
-                x = x * (1f - mix * .55f) + wet * mix * .75f;
-                chorusPosition = (chorusPosition + 1) % chorus.length;
-                chorusPhase += 2 * Math.PI * (.15 + parameter(s, 5, 0) * .05) / RATE;
-            }
+                    float threshold = .002f
+                            + parameter(s, 0, 0) * .00095f;
 
-            if (s.enabled[6]) {
-                int distance = Math.max(1, Math.min(delay.length - 1,
-                        (int) ((.03f + parameter(s, 6, 0) * .0047f) * RATE)));
-                float echo = delay[(delayPosition - distance + delay.length) % delay.length];
-                float mix = parameter(s, 6, 2) / 100f;
-                delay[delayPosition] = x + echo * Math.min(.82f, parameter(s, 6, 1) / 125f);
-                x = x * (1f - mix * .75f) + echo * mix * .85f;
-                delayPosition = (delayPosition + 1) % delay.length;
-            } else {
-                delay[delayPosition] = x;
-                delayPosition = (delayPosition + 1) % delay.length;
-            }
-
-            if (s.enabled[7]) {
-                float reflection = reverb[reverbPosition];
-                float mix = parameter(s, 7, 2) / 100f;
-                reverb[reverbPosition] = x + reflection
-                        * Math.min(.86f, .28f + parameter(s, 7, 0) / 180f);
-                x = x * (1f - mix * .7f)
-                        + reflection * (.75f + parameter(s, 7, 1) / 400f) * mix;
-                reverbPosition = (reverbPosition + 1) % reverb.length;
-            } else {
-                reverb[reverbPosition] = x;
-                reverbPosition = (reverbPosition + 1) % reverb.length;
-            }
-
-            if (s.ampOn) {
-                float driven = (float) Math.tanh(x * s.gain * ampDrive(s.ampModel));
-                ampLow += .035f * (driven - ampLow);
-                ampMid += .16f * (driven - ampMid);
-                x = ampLow * (.35f + s.bass * 1.15f)
-                        + (ampMid - ampLow) * (.35f + s.middle * 1.15f)
-                        + (driven - ampMid) * (.25f + s.treble * 1.35f);
-                x *= .55f + s.ampVolume * .7f;
-            }
-
-            if (s.cabOn) {
-                cabLow += cabCutoff(s.cabModel) * (x - cabLow);
-                x = cabLow * .88f + x * .12f;
-            }
-
-            // Looper captures the processed signal before master volume.
-            if (loopRecording) {
-                int position = loopWritePosition;
-                if (position < loopBuffer.length) {
-                    loopBuffer[position] = (short) (clamp(x) * 32767f);
-                    loopWritePosition = position + 1;
-                    if (loopWritePosition >= loopBuffer.length) {
-                        loopRecording = false;
-                        loopLength = loopWritePosition;
-                        notifyLooper();
+                    if (gateEnvelope < threshold) {
+                        x *= .025f;
                     }
+                    break;
+                }
+
+                case 1: // COMPRESSOR
+                {
+                    float level = Math.abs(x);
+
+                    compressorEnvelope +=
+                            (level > compressorEnvelope ? .18f : .012f)
+                            * (level - compressorEnvelope);
+
+                    float threshold =
+                            .38f - parameter(s, 1, 0) * .0027f;
+
+                    if (compressorEnvelope > threshold
+                            && compressorEnvelope > .0001f) {
+
+                        float ratio =
+                                1f + parameter(s, 1, 0) / 18f;
+
+                        x *= (threshold
+                                + (compressorEnvelope - threshold) / ratio)
+                                / compressorEnvelope;
+                    }
+
+                    x *= .65f + parameter(s, 1, 1) * .007f;
+                    break;
+                }
+
+                case 2: // OVERDRIVE
+                {
+                    float shaped = (float) Math.tanh(
+                            x * (1f + parameter(s, 2, 0) / 7f)
+                    );
+
+                    overdriveState +=
+                            (.015f + parameter(s, 2, 1) * .0022f)
+                            * (shaped - overdriveState);
+
+                    x = (overdriveState
+                            * (1f - parameter(s, 2, 1) / 150f)
+                            + shaped * parameter(s, 2, 1) / 150f)
+                            * (.5f + parameter(s, 2, 2) * .009f);
+                    break;
+                }
+
+                case 3: // DISTORTION
+                {
+                    float shaped = (float) Math.tanh(
+                            x * (1f + parameter(s, 3, 0) / 4f)
+                    );
+
+                    distortionState +=
+                            (.015f + parameter(s, 3, 1) * .0025f)
+                            * (shaped - distortionState);
+
+                    x = (distortionState
+                            * (1f - parameter(s, 3, 1) / 160f)
+                            + shaped * parameter(s, 3, 1) / 160f)
+                            * (.45f + parameter(s, 3, 2) * .0095f);
+                    break;
+                }
+
+                case 4: // FUZZ
+                {
+                    float shaped = (float) Math.tanh(
+                            x * (1.5f + parameter(s, 4, 0) / 3.2f)
+                    );
+
+                    fuzzState +=
+                            (.01f + parameter(s, 4, 1) * .0028f)
+                            * (shaped - fuzzState);
+
+                    x = (fuzzState
+                            * (1f - parameter(s, 4, 1) / 170f)
+                            + shaped * parameter(s, 4, 1) / 170f)
+                            * (.4f + parameter(s, 4, 2) * .009f);
+                    break;
+                }
+
+                case 5: // MODULATION - CURRENT CHORUS ENGINE
+                {
+                    chorus[chorusPosition] = x;
+
+                    int modulation = (int) (
+                            (Math.sin(chorusPhase) * .5 + .5)
+                            * parameter(s, 5, 1) * RATE * .00018f
+                    );
+
+                    int distance = Math.max(
+                            1,
+                            Math.min(
+                                    chorus.length - 1,
+                                    (int) (RATE * .008f) + modulation
+                            )
+                    );
+
+                    float wet = chorus[
+                            (chorusPosition - distance + chorus.length)
+                                    % chorus.length
+                    ];
+
+                    float mix = parameter(s, 5, 2) / 100f;
+
+                    x = x * (1f - mix * .55f)
+                            + wet * mix * .75f;
+
+                    chorusPosition =
+                            (chorusPosition + 1) % chorus.length;
+
+                    chorusPhase += 2 * Math.PI
+                            * (.15 + parameter(s, 5, 0) * .05)
+                            / RATE;
+                    break;
+                }
+
+                case 6: // DELAY
+                {
+                    int distance = Math.max(
+                            1,
+                            Math.min(
+                                    delay.length - 1,
+                                    (int) (
+                                            (.03f + parameter(s, 6, 0) * .0047f)
+                                            * RATE
+                                    )
+                            )
+                    );
+
+                    float echo = delay[
+                            (delayPosition - distance + delay.length)
+                                    % delay.length
+                    ];
+
+                    float mix = parameter(s, 6, 2) / 100f;
+
+                    delay[delayPosition] = x + echo
+                            * Math.min(
+                                    .82f,
+                                    parameter(s, 6, 1) / 125f
+                            );
+
+                    x = x * (1f - mix * .75f)
+                            + echo * mix * .85f;
+
+                    delayPosition =
+                            (delayPosition + 1) % delay.length;
+                    break;
+                }
+
+                case 7: // REVERB
+                {
+                    float reflection = reverb[reverbPosition];
+                    float mix = parameter(s, 7, 2) / 100f;
+
+                    reverb[reverbPosition] = x + reflection
+                            * Math.min(
+                                    .86f,
+                                    .28f + parameter(s, 7, 0) / 180f
+                            );
+
+                    x = x * (1f - mix * .7f)
+                            + reflection
+                            * (.75f + parameter(s, 7, 1) / 400f)
+                            * mix;
+
+                    reverbPosition =
+                            (reverbPosition + 1) % reverb.length;
+                    break;
                 }
             }
+        }
 
-            if (loopPlaying && loopLength > 0) {
-                int position = loopReadPosition;
-                if (position >= loopLength) position = 0;
-                x = x * .75f + (loopBuffer[position] / 32768f) * .75f;
-                loopReadPosition = (position + 1) % loopLength;
+        // AMP SECTION
+        if (s.ampOn) {
+            float driven = (float) Math.tanh(
+                    x * s.gain * ampDrive(s.ampModel)
+            );
+
+            ampLow += .035f * (driven - ampLow);
+            ampMid += .16f * (driven - ampMid);
+
+            x = ampLow * (.35f + s.bass * 1.15f)
+                    + (ampMid - ampLow)
+                    * (.35f + s.middle * 1.15f)
+                    + (driven - ampMid)
+                    * (.25f + s.treble * 1.35f);
+
+            x *= .55f + s.ampVolume * .7f;
+        }
+
+        // CABINET SECTION
+        if (s.cabOn) {
+            cabLow += cabCutoff(s.cabModel) * (x - cabLow);
+            x = cabLow * .88f + x * .12f;
+        }
+
+        // LOOPER RECORDING
+        if (loopRecording) {
+            int position = loopWritePosition;
+
+            if (position < loopBuffer.length) {
+                loopBuffer[position] =
+                        (short) (clamp(x) * 32767f);
+
+                loopWritePosition = position + 1;
+
+                if (loopWritePosition >= loopBuffer.length) {
+                    loopRecording = false;
+                    loopLength = loopWritePosition;
+                    notifyLooper();
+                }
+            }
+        }
+
+        // LOOPER PLAYBACK
+        if (loopPlaying && loopLength > 0) {
+            int position = loopReadPosition;
+
+            if (position >= loopLength) {
+                position = 0;
             }
 
-            output[i] = (short) (clamp(x * s.master) * 32767f);
+            x = x * .75f
+                    + (loopBuffer[position] / 32768f) * .75f;
+
+            loopReadPosition = (position + 1) % loopLength;
         }
+
+        // MASTER OUTPUT
+        output[i] = (short) (
+                clamp(x * s.master) * 32767f
+        );
     }
+}
 
     private final class PitchDetector {
         private final float[] samples = new float[2048];
