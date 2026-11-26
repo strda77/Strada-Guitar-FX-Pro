@@ -130,6 +130,10 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
     private SeekBar[][] effectSeekBars = new SeekBar[EFFECT_COUNT][3];
     private TextView[][] effectParamValues = new TextView[EFFECT_COUNT][3];
     private PedalFaceView[] pedalViews = new PedalFaceView[EFFECT_COUNT];
+    private LinearLayout pedalList;
+    private final int[] effectOrder = {
+    0, 1, 2, 3, 4, 5, 6, 7
+};
 
     private final boolean[] effectEnabled = new boolean[EFFECT_COUNT];
     private final int[][] effectParams = new int[EFFECT_COUNT][3];
@@ -216,6 +220,7 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
         effectSeekBars = new SeekBar[EFFECT_COUNT][3];
         effectParamValues = new TextView[EFFECT_COUNT][3];
         pedalViews = new PedalFaceView[EFFECT_COUNT];
+        pedalList = null;
 
         switch (page) {
             case "HOME": buildHomePage(); break;
@@ -831,11 +836,14 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
     }
 
     private void applyPresetValues(int index, boolean refresh) {
-        selectedPreset = clamp(index, 0, getAllPresetNames().length - 1);
+        selectedPreset = clamp(index, 0, getAllPresetNames().length - 1):
         if (loadPresetProfile(selectedPreset)) {
-            if (refresh) refreshAllUi();
-            pushSettings();
-            return;
+           if (refresh) refreshAllUi();
+           pushSettings();
+           return;
+}
+        // Preset yang belum memiliki profil menggunakan urutan standar.
+        loadEffectOrder(selectedPreset);
         }
         for (int i = 0; i < EFFECT_COUNT; i++) {
             boolean on;
@@ -947,6 +955,7 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
             for (int j = 0; j < 3; j++) e.putInt(key + "param_" + i + "_" + j, effectParams[i][j]);
         }
         e.apply();
+saveEffectOrder(index);
     }
 
     private boolean loadPresetProfile(int index) {
@@ -966,6 +975,7 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
             effectEnabled[i] = preferences.getBoolean(key + "effect_" + i, false);
             for (int j = 0; j < 3; j++) effectParams[i][j] = preferences.getInt(key + "param_" + i + "_" + j, 50);
         }
+        loadEffectOrder(index);
         pushSettings();
         return true;
     }
