@@ -343,34 +343,233 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
 }
 
     private void buildPedalboardPage() {
-        section("FULL COLOR PEDALBOARD", "Ketuk pedal untuk ON/OFF. Geser kenop atau gunakan slider.");
-        for (int i = 0; i < EFFECT_COUNT; i++) {
-            final int id = i;
-            PedalFaceView pedal = new PedalFaceView(this, id);
-            pedalViews[id] = pedal;
-            LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1, dp(205));
-            pp.setMargins(0, dp(7), 0, dp(2));
-            pageContainer.addView(pedal, pp);
-            LinearLayout c = card(effectColors[id]);
-            pageContainer.addView(c);
-            LinearLayout head = row();
-            c.addView(head);
-            head.addView(text(effectNames[id] + " PARAMETERS", 14, effectColors[id], true),
-                    new LinearLayout.LayoutParams(0, -2, 1));
-            Button toggle = new Button(this);
-            styleButton(toggle, effectEnabled[id] ? "ON" : "OFF", effectColors[id]);
-            head.addView(toggle, new LinearLayout.LayoutParams(dp(78), dp(40)));
-            toggle.setOnClickListener(v -> {
-                effectEnabled[id] = !effectEnabled[id];
-                toggle.setText(effectEnabled[id] ? "ON" : "OFF");
-                toggle.setBackground(bgShape(effectEnabled[id] ? effectColors[id] : Color.DKGRAY, effectColors[id]));
-                pedal.invalidate();
-                pushSettings();
-            });
-            c.addView(text(effectDescription(id), 10, MUTED, false));
-            for (int j = 0; j < paramCount(id); j++) addEffectParamControl(c, id, j);
+    section("FULL COLOR PEDALBOARD",
+            "Tekan dan tahan pedal untuk memindahkan posisi. Ketuk untuk ON/OFF.");
+
+    pedalList = new LinearLayout(this);
+    pedalList.setOrientation(LinearLayout.VERTICAL);
+    pageContainer.addView(pedalList);
+
+    for (int position = 0; position < EFFECT_COUNT; position++) {
+        final int id = effectOrder[position];
+
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setTag(id);
+
+        LinearLayout.LayoutParams itemParams =
+                new LinearLayout.LayoutParams(-1, -2);
+        itemParams.setMargins(0, dp(7), 0, dp(5));
+
+        pedalList.addView(item, itemParams);
+
+        PedalFaceView pedal = new PedalFaceView(this, id);
+        pedalViews[id] = pedal;
+
+        LinearLayout.LayoutParams pp =
+                new LinearLayout.LayoutParams(-1, dp(205));
+        item.addView(pedal, pp);
+
+        LinearLayout c = card(effectColors[id]);
+        item.addView(c);
+
+        LinearLayout head = row();
+        c.addView(head);
+
+        head.addView(
+                text(effectNames[id] + " PARAMETERS",
+                        14, effectColors[id], true),
+                new LinearLayout.LayoutParams(0, -2, 1)
+        );
+
+        Button toggle = new Button(this);
+        styleButton(toggle,
+                effectEnabled[id] ? "ON" : "OFF",
+                effectColors[id]);
+
+        head.addView(toggle,
+                new LinearLayout.LayoutParams(dp(78), dp(40)));
+
+        toggle.setOnClickListener(v -> {
+            effectEnabled[id] = !effectEnabled[id];
+
+            toggle.setText(effectEnabled[id] ? "ON" : "OFF");
+
+            toggle.setBackground(bgShape(
+                    effectEnabled[id] ? effectColors[id] : Color.DKGRAY,
+                    effectColors[id]
+            ));
+
+            pedal.invalidate();
+            pushSettings();
+        });
+
+        c.addView(text(
+                effectDescription(id), 10, MUTED, false
+        ));
+
+        for (int j = 0; j < paramCount(id); j++) {
+            addEffectParamControl(c, id, j);
+        }
+
+        // Tekan dan tahan pedal untuk mulai drag.
+        pedal.setOnLongClickListener(v -> {
+            android.content.ClipData data =
+                    android.content.ClipData.newPlainText(
+                            "StradaPedal", String.valueOf(id));
+
+            android.view.View.DragShadowBuilder shadow =
+                    new android.view.View.DragShadowBuilder(item);
+
+            return item.startDrag(
+                    data, shadow, item, 0
+            );
+        });
+
+        item.setOnDragListener((target, event) -> {
+            switch (event.getAction()) {
+
+                case android.view.DragEvent.ACTION_DRAG_STARTED:
+                    return event.getLocalState() instanceof LinearLayout;
+
+                case android.view.DragEvent.ACTION_DRAG_ENTERED:
+                    target.setAlpha(0.65f);
+                    return true;
+
+                case android.view.DragEvent.ACTION_DRAG_EXITED:
+                    target.setAlpha(1f);
+                    return true;
+
+                case android.view.DragEvent.ACTION_DROP: {
+                    Object state = event.getLocalState();
+
+                    if (!(state instanceof LinearLayout)) {
+                        return false;
+                    }
+
+                    LinearLayout dragged =
+                            (LinearLayout) state;
+
+                    if (dragged == target ||
+                            dragged.getParent() != pedalList) {
+                        return false;
+                    }
+
+                    int from = pedalList.indexOfChild(dragged);
+                    int to = pedalList.indexOfChild(target);
+
+                    if (from < 0 || to < 0) {
+                        return false;
+                    }
+
+                    pedalList.removeView(dragged);
+
+                    if (from < to) {
+                        to--;
+                    }
+
+                    pedalList.addView(dragged, to);
+
+                    updateEffectOrderFromPedalboard();
+                    pushSettings();
+
+                    return true;
+                }
+
+                case android.view.DragEvent.ACTION_DRAG_ENDED:
+                    target.setAlpha(1f);
+                    return true;
+            }
+
+            return true;
+        });
+    }
+}
+
+    private void updateEffectOrderFromPedalboard() {
+    if (pedalList == null) return;
+
+    for (int i = 0; i < EFFECT_COUNT; i++) {
+        Object tag = pedalList.getChildAt(i).getTag();
+
+        if (tag instanceof Integer) {
+            effectOrder[i] = (Integer) tag;
         }
     }
+}
+    
+    private void saveEffectOrder(int presetIndex) {
+    StringBuilder value = new StringBuilder();
+
+    for (int i = 0; i < EFFECT_COUNT; i++) {
+        if (i > 0) value.append(",");
+        value.append(effectOrder[i]);
+    }
+
+    preferences.edit()
+            .putString(
+                    "preset_" + presetIndex + "_effect_order",
+                    value.toString()
+            )
+            .apply();
+}
+
+    private void loadEffectOrder(int presetIndex) {
+    String saved = preferences.getString(
+            "preset_" + presetIndex + "_effect_order",
+            "0,1,2,3,4,5,6,7"
+    );
+
+    String[] parts = saved.split(",");
+    if (parts.length != EFFECT_COUNT) return;
+
+    int[] loaded = new int[EFFECT_COUNT];
+    boolean[] used = new boolean[EFFECT_COUNT];
+
+    try {
+        for (int i = 0; i < EFFECT_COUNT; i++) {
+            int id = Integer.parseInt(parts[i].trim());
+
+            if (id < 0 || id >= EFFECT_COUNT || used[id]) {
+                return;
+            }
+
+            loaded[i] = id;
+            used[id] = true;
+        }
+    } catch (NumberFormatException e) {
+        return;
+    }
+
+    System.arraycopy(
+            loaded, 0, effectOrder, 0, EFFECT_COUNT
+    );
+
+    applyEffectOrderToPedalboard();
+}
+
+    private void applyEffectOrderToPedalboard() {
+    if (pedalList == null ||
+            pedalList.getChildCount() != EFFECT_COUNT) {
+        return;
+    }
+
+    for (int i = 0; i < EFFECT_COUNT; i++) {
+        int wantedId = effectOrder[i];
+
+        for (int j = i; j < EFFECT_COUNT; j++) {
+            android.view.View child = pedalList.getChildAt(j);
+
+            if (child.getTag() instanceof Integer
+                    && ((Integer) child.getTag()) == wantedId) {
+
+                pedalList.removeViewAt(j);
+                pedalList.addView(child, i);
+                break;
+            }
+        }
+    }
+}
 
     private void addEffectParamControl(LinearLayout parent, int id, int index) {
         LinearLayout line = new LinearLayout(this);
@@ -621,6 +820,13 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
         s.cabModel = selectedCab;
         s.input = selectedInput;
         s.output = selectedOutput;
+        System.arraycopy(
+        effectOrder,
+        0,
+        s.effectOrder,
+        0,
+        EFFECT_COUNT
+);
         audioEngine.updateSettings(s);
     }
 
@@ -774,6 +980,7 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
         }
     }
 
+    
     private void refreshEffectControlUi() {
         for (int i = 0; i < EFFECT_COUNT; i++) {
             if (pedalViews[i] != null) pedalViews[i].invalidate();
