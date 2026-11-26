@@ -836,40 +836,60 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
     }
 
     private void applyPresetValues(int index, boolean refresh) {
-        selectedPreset = clamp(index, 0, getAllPresetNames().length - 1):
-        if (loadPresetProfile(selectedPreset)) {
-           if (refresh) refreshAllUi();
-           pushSettings();
-           return;
-}
-        // Preset yang belum memiliki profil menggunakan urutan standar.
-        loadEffectOrder(selectedPreset);
-        }
-        for (int i = 0; i < EFFECT_COUNT; i++) {
-            boolean on;
-            if (selectedPreset < 6) on = (i == 0 || i == 1 || i == 5) && ((selectedPreset + i) % 3 != 0);
-            else if (selectedPreset < 20) on = i == 1 || i == 2 || (i == 6 && selectedPreset % 3 == 0) || (i == 7 && selectedPreset % 4 == 0);
-            else if (selectedPreset < 34) on = i == 0 || i == 3 || i == 4 || (i == 1 && selectedPreset % 2 == 0);
-            else if (selectedPreset < 45) on = i == 5 || i == 6 || i == 7 || (i == 2 && selectedPreset % 2 == 0);
-            else on = ((selectedPreset + i * 2) % 5) < 2;
-            effectEnabled[i] = on;
-            for (int j = 0; j < 3; j++) {
-                effectParams[i][j] = 25 + ((selectedPreset * 13 + i * 17 + j * 29) % 70);
-            }
-        }
-        ampGain = 1.5f + (selectedPreset % 10) * .35f;
-        ampVolume = .58f + (selectedPreset % 5) * .08f;
-        ampBass = .35f + (selectedPreset % 4) * .12f;
-        ampMiddle = .38f + ((selectedPreset + 1) % 4) * .12f;
-        ampTreble = .35f + ((selectedPreset + 2) % 5) * .12f;
-        selectedAmp = selectedPreset % ampNames.length;
-        selectedCab = (selectedPreset + 5) % cabNames.length;
-        masterVolume = .55f + (selectedPreset % 5) * .08f;
-        ampOn = true;
-        cabOn = true;
-        pushSettings();
+    selectedPreset = clamp(index, 0, getAllPresetNames().length - 1);
+
+    if (loadPresetProfile(selectedPreset)) {
         if (refresh) refreshAllUi();
+        pushSettings();
+        return;
     }
+
+    // Preset yang belum memiliki profil menggunakan urutan standar.
+    loadEffectOrder(selectedPreset);
+
+    for (int i = 0; i < EFFECT_COUNT; i++) {
+        boolean on;
+
+        if (selectedPreset < 6) {
+            on = (i == 0 || i == 1 || i == 5)
+                    && ((selectedPreset + i) % 3 != 0);
+        } else if (selectedPreset < 20) {
+            on = i == 1 || i == 2
+                    || (i == 6 && selectedPreset % 3 == 0)
+                    || (i == 7 && selectedPreset % 4 == 0);
+        } else if (selectedPreset < 34) {
+            on = i == 0 || i == 3 || i == 4
+                    || (i == 1 && selectedPreset % 2 == 0);
+        } else if (selectedPreset < 45) {
+            on = i == 5 || i == 6 || i == 7
+                    || (i == 2 && selectedPreset % 2 == 0);
+        } else {
+            on = ((selectedPreset + i * 2) % 5) < 2;
+        }
+
+        effectEnabled[i] = on;
+
+        for (int j = 0; j < 3; j++) {
+            effectParams[i][j] =
+                    25 + ((selectedPreset * 13 + i * 17 + j * 29) % 70);
+        }
+    }
+
+    ampGain = 1.5f + (selectedPreset % 10) * .35f;
+    ampVolume = .58f + (selectedPreset % 5) * .08f;
+    ampBass = .35f + (selectedPreset % 4) * .12f;
+    ampMiddle = .38f + ((selectedPreset + 1) % 4) * .12f;
+    ampTreble = .35f + ((selectedPreset + 2) % 5) * .12f;
+    selectedAmp = selectedPreset % ampNames.length;
+    selectedCab = (selectedPreset + 5) % cabNames.length;
+    masterVolume = .55f + (selectedPreset % 5) * .08f;
+    ampOn = true;
+    cabOn = true;
+
+    pushSettings();
+
+    if (refresh) refreshAllUi();
+ }
 
     private void refreshAllUi() {
         updatePresetLabels();
@@ -978,7 +998,7 @@ saveEffectOrder(index);
         loadEffectOrder(index);
         pushSettings();
         return true;
-    }
+     }
 
     private void updatePresetLabels() {
         if (presetTitle != null) {
