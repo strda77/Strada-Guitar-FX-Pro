@@ -105,8 +105,34 @@ public final class AudioEngine {
     }
 
     public void updateSettings(Settings value) {
-        if (value != null) settings = value.copy();
+    if (value != null) {
+        settings = value.copy();
     }
+}
+
+    public synchronized boolean setEffectOrder(int[] order) {
+    if (order == null || order.length != EFFECTS) {
+        return false;
+    }
+
+    boolean[] used = new boolean[EFFECTS];
+
+    for (int id : order) {
+        if (id < 0 || id >= EFFECTS || used[id]) {
+            return false;
+        }
+        used[id] = true;
+    }
+
+    Settings updated = settings.copy();
+    System.arraycopy(order, 0, updated.effectOrder, 0, EFFECTS);
+    settings = updated;
+    return true;
+}
+
+    public int[] getEffectOrder() {
+    return settings.copy().effectOrder.clone();
+}
 
     public boolean isRunning() {
         return running.get();
