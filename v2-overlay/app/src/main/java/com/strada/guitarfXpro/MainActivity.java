@@ -820,6 +820,13 @@ public class MainActivity extends Activity implements AudioEngine.Listener {
         s.cabModel = selectedCab;
         s.input = selectedInput;
         s.output = selectedOutput;
+        System.arraycopy(
+        effectOrder,
+        0,
+        s.effectOrder,
+        0,
+        EFFECT_COUNT
+);
         audioEngine.updateSettings(s);
     }
 
