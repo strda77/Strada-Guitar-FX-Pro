@@ -794,4 +794,4 @@ public final class AudioEngine {
             listener.onLooperChanged(loopRecording, loopPlaying, loopLength);
         }
     }
-            }
+ }
