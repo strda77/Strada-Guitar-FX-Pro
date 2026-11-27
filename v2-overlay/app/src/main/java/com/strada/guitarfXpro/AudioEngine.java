@@ -300,26 +300,30 @@ public final class AudioEngine {
     // =========================================================
 
     public void startLoopRecording() {
-
-        if (!running.get()) {
-            status("Jalankan audio sebelum merekam loop.");
-            return;
-        }
-
-        loopCommand.set(CMD_RECORD);
+    if (!running.get()) {
+        status("Jalankan audio sebelum merekam loop.");
+        return;
     }
+    loopCommand.set(CMD_RECORD);
+}
 
     public void stopLoopRecording() {
+    if (loopRecording) {
         loopCommand.set(CMD_STOP_RECORD);
     }
+}
 
     public void toggleLoopPlayback() {
-        loopCommand.set(CMD_PLAY);
+    if (!running.get()) {
+        status("Jalankan audio sebelum memutar loop.");
+        return;
     }
+    loopCommand.set(CMD_PLAY);
+}
 
     public void clearLoop() {
-        loopCommand.set(CMD_CLEAR);
-    }
+    loopCommand.set(CMD_CLEAR);
+}  
 
     public boolean isLoopRecording() {
         return loopRecording;
@@ -682,43 +686,62 @@ public final class AudioEngine {
     }
 
     private AudioDeviceInfo findDevice(
-            AudioDeviceInfo[] devices,
-            String wanted,
-            boolean input) {
+        AudioDeviceInfo[] devices,
+        String wanted,
+        boolean input) {
 
-        for (AudioDeviceInfo device : devices) {
+    if (devices == null || wanted == null) {
+        return null;
+    }
 
-            if (input && !device.isSource()) continue;
-            if (!input && !device.isSink()) continue;
+    for (AudioDeviceInfo device : devices) {
 
-            int type = device.getType();
+        if (device == null) {
+            continue;
+        }
 
-            if (input
-                    && "Microphone (HP)".equals(wanted)
+        if (input && !device.isSource()) {
+            continue;
+        }
+
+        if (!input && !device.isSink()) {
+            continue;
+        }
+
+        int type = device.getType();
+
+        if (input) {
+
+            if ("Microphone (HP)".equals(wanted)
                     && type == AudioDeviceInfo.TYPE_BUILTIN_MIC) {
                 return device;
             }
 
-            if (input
-                    && "Wired Headset Mic".equals(wanted)
+            if ("Wired Headset Mic".equals(wanted)
                     && type == AudioDeviceInfo.TYPE_WIRED_HEADSET) {
                 return device;
             }
 
-            if (("USB Audio Interface".equals(wanted)
-                    || "USB Audio Output".equals(wanted))
+            if ("USB Audio Interface".equals(wanted)
                     && isUsbType(type)) {
                 return device;
             }
 
-            if (!input
-                    && "Speaker".equals(wanted)
+        } else {
+
+            if ("Speaker".equals(wanted)
                     && type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
                 return device;
             }
-        }
 
-        return null;
+            if ("USB Audio Output".equals(wanted)
+                    && isUsbType(type)) {
+                return device;
+            }
+        }
+    }
+
+    return null;
     }
 
     private boolean isUsbType(int type) {
@@ -1268,95 +1291,194 @@ public final class AudioEngine {
     // Pitch analysis is moved away from the audio processing loop.
     // =========================================================
 
+
     private final class PitchDetector {
 
-        private final Object lock = new Object();
+    private final Object lock = new Object();
 
-        private final float[] ring = new float[2048];
-        private final float[] frame = new float[2048];
+    private final float[] ring = new float[2048];
+    private final float[] frame = new float[2048];
 
-        private int position;
-        private int filled;
-        private int samplesSinceCheck;
+    private int position;
+    private int filled;
+    private int samplesSinceCheck;
 
-        private boolean frameReady;
-        private boolean active = true;
+    private boolean frameReady;
+    private boolean active = true;
 
-        private final Thread worker;
+    private final Thread worker;
 
-        PitchDetector() {
+    PitchDetector() {
+        worker = new Thread(
+                this::run,
+                "StradaPitchDetector"
+        );
 
-            worker = new Thread(
-                    this::run,
-                    "StradaPitchDetector"
-            );
+        worker.setPriority(Thread.NORM_PRIORITY);
+        worker.start();
+    }
 
-            worker.setPriority(Thread.NORM_PRIORITY);
-            worker.start();
+    void add(short[] input, int count) {
+
+        if (input == null || count <= 0) {
+            return;
         }
 
-        void add(short[] input, int count) {
+        int length = Math.min(count, input.length);
 
-            for (int i = 0; i < count; i++) {
+        for (int i = 0; i < length; i++) {
 
-                ring[position] = input[i] / 32768f;
+            ring[position] = input[i] / 32768f;
 
-                position = (position + 1) % ring.length;
-
-                if (filled < ring.length) {
-                    filled++;
-                }
-
-                samplesSinceCheck++;
+            position++;
+            if (position >= ring.length) {
+                position = 0;
             }
 
-            if (filled < ring.length || samplesSinceCheck < 1024) {
+            if (filled < ring.length) {
+                filled++;
+            }
+
+            samplesSinceCheck++;
+        }
+
+        if (filled < ring.length ||
+                samplesSinceCheck < 2048) {
+            return;
+        }
+
+        samplesSinceCheck = 0;
+
+        synchronized (lock) {
+
+            if (!active || frameReady) {
                 return;
             }
 
-            samplesSinceCheck = 0;
+            for (int i = 0; i < frame.length; i++) {
+
+                int index = position + i;
+
+                if (index >= ring.length) {
+                    index -= ring.length;
+                }
+
+                frame[i] = ring[index];
+            }
+
+            frameReady = true;
+            lock.notifyAll();
+        }
+    }
+
+    private void run() {
+
+        float[] work = new float[2048];
+
+        while (true) {
 
             synchronized (lock) {
 
-                if (!active || frameReady) {
+                while (active && !frameReady) {
+                    try {
+                        lock.wait();
+                    } catch (InterruptedException e) {
+                        if (!active) {
+                            return;
+                        }
+                    }
+                }
+
+                if (!active) {
                     return;
                 }
 
-                for (int i = 0; i < frame.length; i++) {
-                    frame[i] = ring[(position + i) % ring.length];
-                }
+                System.arraycopy(
+                        frame,
+                        0,
+                        work,
+                        0,
+                        frame.length
+                );
 
-                frameReady = true;
-                lock.notifyAll();
+                frameReady = false;
+            }
+
+            detect(work);
+        }
+    }
+
+    private void detect(float[] samples) {
+
+        float mean = 0f;
+
+        for (float sample : samples) {
+            mean += sample;
+        }
+
+        mean /= samples.length;
+
+        float bestScore = 0f;
+        int bestLag = -1;
+
+        int minLag = RATE / 1200;
+        int maxLag = RATE / 55;
+
+        for (int lag = minLag; lag <= maxLag; lag++) {
+
+            double correlation = 0;
+            double energyA = 0;
+            double energyB = 0;
+
+            for (int j = 0;
+                 j < samples.length - lag;
+                 j += 2) {
+
+                float a = samples[j] - mean;
+                float b = samples[j + lag] - mean;
+
+                correlation += a * b;
+                energyA += a * a;
+                energyB += b * b;
+            }
+
+            if (energyA > 0.0000001 &&
+                    energyB > 0.0000001) {
+
+                float score = (float) (
+                        correlation /
+                        Math.sqrt(energyA * energyB)
+                );
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestLag = lag;
+                }
             }
         }
 
-        private void run() {
+        if (bestLag > 0 && bestScore > 0.48f) {
 
-            float[] work = new float[2048];
+            float frequency = RATE / (float) bestLag;
 
-            while (true) {
+            if (frequency >= 50f &&
+                    frequency <= 1200f &&
+                    listener != null) {
 
-                synchronized (lock) {
-
-                    while (active && !frameReady) {
-                        try {
-                            lock.wait();
-                        } catch (InterruptedException e) {
-                            if (!active) return;
-                        }
-                    }
-
-                    if (!active) {
-                        return;
-                    }
-
-                    System.arraycopy(frame, 0, work, 0, frame.length);
-                    frameReady = false;
-                }
-
-                detect(work);
+                listener.onPitch(frequency);
             }
+        }
+    }
+
+    void shutdown() {
+
+        synchronized (lock) {
+            active = false;
+            lock.notifyAll();
+        }
+
+        worker.interrupt();
+    }
         }
 
         private void detect(float[] samples) {
