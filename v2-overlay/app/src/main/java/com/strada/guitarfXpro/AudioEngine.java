@@ -335,49 +335,57 @@ public final class AudioEngine {
 
     private void applyLoopCommand() {
 
-        int command = loopCommand.getAndSet(CMD_NONE);
+    int command = loopCommand.getAndSet(CMD_NONE);
 
-        switch (command) {
+    // Jangan kirim callback jika tidak ada perintah baru.
+    if (command == CMD_NONE) {
+        return;
+    }
 
-            case CMD_RECORD:
-                if (running.get()) {
-                    loopPlaying = false;
-                    loopRecording = true;
-                    loopLength = 0;
-                    loopWritePosition = 0;
-                    loopReadPosition = 0;
-                }
-                break;
+    switch (command) {
 
-            case CMD_STOP_RECORD:
-                if (loopRecording) {
-                    loopRecording = false;
-                    loopLength = loopWritePosition;
-                    loopReadPosition = 0;
-                }
-                break;
-
-            case CMD_PLAY:
-                if (loopPlaying) {
-                    loopPlaying = false;
-                } else if (running.get() && loopLength > 0) {
-                    loopReadPosition = 0;
-                    loopPlaying = true;
-                } else {
-                    status("Belum ada loop tersimpan.");
-                }
-                break;
-
-            case CMD_CLEAR:
-                loopRecording = false;
+        case CMD_RECORD:
+            if (running.get()) {
                 loopPlaying = false;
+                loopRecording = true;
                 loopLength = 0;
                 loopWritePosition = 0;
                 loopReadPosition = 0;
-                break;
-        }
+            }
+            break;
 
-        notifyLooper();
+        case CMD_STOP_RECORD:
+            if (loopRecording) {
+                loopRecording = false;
+                loopLength = loopWritePosition;
+                loopReadPosition = 0;
+            }
+            break;
+
+        case CMD_PLAY:
+            if (loopPlaying) {
+                loopPlaying = false;
+            } else if (running.get() && loopLength > 0) {
+                loopReadPosition = 0;
+                loopPlaying = true;
+            } else {
+                status("Belum ada loop tersimpan.");
+            }
+            break;
+
+        case CMD_CLEAR:
+            loopRecording = false;
+            loopPlaying = false;
+            loopLength = 0;
+            loopWritePosition = 0;
+            loopReadPosition = 0;
+            break;
+
+        default:
+            return;
+    }
+
+    notifyLooper();
     }
 
     // =========================================================
